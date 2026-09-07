@@ -24,7 +24,9 @@ import { renderTemplatePng } from "./cad/png";
 import { parseSTL } from "./cad/stl";
 import type { HistoryJob, JobObject, JobSettings, PreviewMode, StepId } from "./types";
 import { ObjectCard } from "./ui/ObjectCard";
+import { PartViewport } from "./ui/PartViewport";
 import { Preview } from "./ui/Preview";
+import { SummaryCard } from "./ui/SummaryCard";
 
 export default function App() {
   const [step, setStep] = useState<StepId>("setup");
@@ -35,6 +37,7 @@ export default function App() {
   const [moves, setMoves] = useState<Record<string, [number, number]>>({});
   const [preview, setPreview] = useState<PreviewMode>("template");
   const [jigColor, setJigColor] = useState("#3ddc97");
+  const [viewReset, setViewReset] = useState(0);
   const [help, setHelp] = useState(false);
   const [histName, setHistName] = useState("");
   const [history, setHistory] = useState<HistoryJob[]>([]);
@@ -195,6 +198,12 @@ export default function App() {
 
       <div className="shell">
         <aside className="controls">
+          <PartViewport
+            objects={objects}
+            stlMap={stlMap.current}
+            onChange={(id, p) => setObjects((list) => list.map((x) => (x.id === id ? { ...x, ...p } : x)))}
+          />
+          <SummaryCard result={result} />
           <div className="steps">
             {(["setup", "layout", "output"] as StepId[]).map((id) => (
               <button key={id} type="button" className={step === id ? "on" : ""} onClick={() => setStep(id)}>
@@ -473,12 +482,27 @@ export default function App() {
               </div>
               <span className="sp" />
               <input type="color" value={jigColor} onChange={(e) => setJigColor(e.target.value)} title="color 3D" />
-              <button className="ghost" type="button" onClick={() => setMoves({})}>
-                Reset positions
-              </button>
             </div>
             <div className="canvas-wrap">
-              <Preview result={result} mode={preview} showNum={settings.showNum} jigColor={jigColor} onMove={onMove} />
+              <Preview
+                result={result}
+                mode={preview}
+                showNum={settings.showNum}
+                jigColor={jigColor}
+                resetToken={viewReset}
+                onMove={onMove}
+              />
+            </div>
+            <div className="preview-ft">
+              <p className="hint">Scroll to zoom, drag empty space to pan · Template: drag piece to reposition</p>
+              <div className="preview-actions">
+                <button className="ghost" type="button" onClick={() => setViewReset((n) => n + 1)}>
+                  Reset view
+                </button>
+                <button className="ghost" type="button" onClick={() => setMoves({})}>
+                  Reset positions
+                </button>
+              </div>
             </div>
             <div className="legend">
               <span>
@@ -497,24 +521,6 @@ export default function App() {
           </div>
 
           <div className="card">
-            <h2>Resumen</h2>
-            <div className="row">
-              <span>
-                {result.totalUnits} up · placa {result.jig.w.toFixed(1)} × {result.jig.h.toFixed(1)} mm
-                {result.frameOn ? " · frame 334×90" : ""} · {result.fits ? "cabe" : "NO cabe"}
-              </span>
-            </div>
-            {result.objects.map((o) => (
-              <div className="row" key={o.letter}>
-                <span style={{ color: o.color }}>
-                  {o.letter} {o.name}
-                </span>
-                <span className="sp" />
-                <span style={{ fontFamily: "var(--mono)", color: "var(--muted)" }}>
-                  {o.w.toFixed(1)}×{o.h.toFixed(1)} · {o.placed}/{o.requested}
-                </span>
-              </div>
-            ))}
             <h2>Descargas</h2>
             <div className="dlgrid">
               <button

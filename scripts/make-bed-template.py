@@ -95,6 +95,30 @@ def main() -> None:
     tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
     draw.text((cx - tw / 2, cy - th / 2 - 2), "A1", fill=BLUE, font=font)
 
+    # Right rail: eufyMake + QR-like mark (outside the printable rectangle)
+    try:
+        vert = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 20)
+    except OSError:
+        vert = small
+    label = "eufyMake"
+    tx = INNER[2] + 36
+    ty = INNER[1] + 28
+    for ch in label:
+        bb = draw.textbbox((0, 0), ch, font=vert)
+        draw.text((tx, ty), ch, fill=BLUE, font=vert)
+        ty += bb[3] - bb[1] + 4
+    qr = 72
+    qx, qy = INNER[2] + 22, INNER[3] - qr - 18
+    draw.rectangle((qx, qy, qx + qr, qy + qr), outline=BLUE, width=2)
+    cell = 6
+    for i in range(10):
+        for j in range(10):
+            if (i * 7 + j * 3 + i * j) % 3 == 0:
+                draw.rectangle(
+                    (qx + 6 + i * cell, qy + 6 + j * cell, qx + 10 + i * cell, qy + 10 + j * cell),
+                    fill=BLUE,
+                )
+
     out = Path(__file__).resolve().parents[1] / "public" / "bed-template.png"
     img.save(out, "PNG")
     meta = {
