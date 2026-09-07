@@ -97,7 +97,8 @@ select {
 .shell {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, var(--controls-w)) minmax(50%, 1fr);
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  grid-template-areas: "controls workspace";
   gap: 16px;
   padding: 16px;
   align-items: stretch;
@@ -107,12 +108,40 @@ select {
 }
 
 .controls {
-  max-width: 380px;
+  grid-area: controls;
+  max-width: 340px;
   width: 100%;
   display: flex;
   flex-direction: column;
   gap: 12px;
   max-height: calc(100vh - 88px);
+  position: sticky;
+  top: 72px;
+  overflow: auto;
+}
+
+.workspace {
+  grid-area: workspace;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 12px;
+  min-width: 0;
+  align-items: start;
+}
+
+.preview-col {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.preview-rail {
+  width: 260px;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   position: sticky;
   top: 72px;
 }
@@ -228,6 +257,145 @@ select {
   margin-left: 6px;
 }
 
+.ok-pill {
+  background: color-mix(in srgb, var(--ok) 20%, transparent);
+  color: var(--ok);
+  margin-left: 0;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.warn-pill {
+  background: color-mix(in srgb, var(--warn) 20%, transparent);
+  color: var(--warn);
+  margin-left: 0;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.orient-card .part-view {
+  position: relative;
+  height: 220px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.orient-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.orient-card .part-view canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.seats-btn {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  border: 1px solid var(--border);
+  background: rgba(15, 20, 25, 0.82);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.seats-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.seats-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.summary-card .sum-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sum-count {
+  font-size: 40px;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.sum-pockets {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 2px 0 4px;
+}
+
+.sum-bed {
+  color: var(--text);
+  font-size: 13.5px;
+}
+
+.sum-objs {
+  margin: 12px 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sum-obj {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sum-obj-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 650;
+}
+
+.sum-obj-meta {
+  font-family: var(--mono);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.sum-details {
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sum-details div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.sum-details span {
+  color: var(--muted);
+}
+
+.sum-details b {
+  font-family: var(--mono);
+  font-weight: 650;
+}
+
 .seg {
   display: flex;
   background: var(--surface-2);
@@ -313,13 +481,6 @@ select {
   cursor: not-allowed;
 }
 
-.preview-col {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
 .preview-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -343,7 +504,7 @@ select {
 .canvas-wrap {
   position: relative;
   flex: 1;
-  min-height: 420px;
+  min-height: 520px;
   background:
     radial-gradient(circle at 1px 1px, rgba(232, 238, 244, 0.05) 1px, transparent 0) 0 0 / 18px 18px,
     #121820;
@@ -367,6 +528,25 @@ select {
 
 .okbar {
   color: var(--ok);
+}
+
+.preview-ft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 12px 0;
+}
+
+.preview-ft .hint {
+  margin: 0;
+  flex: 1;
+  min-width: 180px;
+}
+
+.preview-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .legend {
@@ -473,9 +653,23 @@ select {
   margin-top: 8px;
 }
 
+@media (max-width: 1100px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+  .preview-rail {
+    width: 100%;
+    min-width: 0;
+    position: static;
+  }
+}
+
 @media (max-width: 960px) {
   .shell {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "workspace"
+      "controls";
   }
   .controls {
     max-width: none;
