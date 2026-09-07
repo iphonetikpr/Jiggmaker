@@ -16,6 +16,8 @@ import {
   bedTemplateUrl,
   bedToPlate,
   fitBedView,
+  plantillaHasBranding,
+  plantillaMarkup,
   plateToBed,
   plateViewSize,
   previewPlateOffset,
@@ -29,10 +31,18 @@ describe("bed template asset", () => {
   it("ships jiggenerator Mini/Standard plantilla SVGs with official inner rects", () => {
     const mini = readFileSync(resolve(root, "public", BED_MINI.file), "utf8");
     const std = readFileSync(resolve(root, "public", BED_STD.file), "utf8");
+    const miniAsset = readFileSync(resolve(root, "src/assets", BED_MINI.file), "utf8");
+    const stdAsset = readFileSync(resolve(root, "src/assets", BED_STD.file), "utf8");
     expect(mini).toContain('viewBox="0 0 1089.552 323.158"');
     expect(std).toContain('viewBox="0 0 1085.983 1284.553"');
-    expect(mini).toContain("<svg");
-    expect(std).toContain("<svg");
+    expect(mini).toContain('id="bedSvgMini"');
+    expect(std).toContain('id="bedSvgStd"');
+    expect(mini).toBe(miniAsset);
+    expect(std).toBe(stdAsset);
+    expect(plantillaHasBranding(mini)).toBe(true);
+    expect(plantillaHasBranding(std)).toBe(true);
+    expect(plantillaHasBranding('<svg viewBox="0 0 10 10"><rect/></svg>')).toBe(false);
+    expect(plantillaMarkup(mini)).toContain('id="plantilla-bg"');
     expect(BED_MINI.inner).toEqual({ x: 37.889, y: 32.312, w: 935.447, h: 255.118 });
     expect(BED_STD.inner).toEqual({ x: 34.195, y: 33.485, w: 935.698, h: 1218.787 });
   });

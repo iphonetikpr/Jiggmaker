@@ -1,128 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { meshFromBytes } from "../cad/prepare";
-import { orientPoint } from "../cad/project";
-import type { JobObject, StlMesh, UpAxis } from "../types";
+import type { JobObject } from "../types";
+import { PART_VIEW, renderOrientedMesh } from "./partView";
 import { flipUp } from "./summary";
 
-function hex(c: string): [number, number, number] {
-  const n = c.replace("#", "");
-  return [parseInt(n.slice(0, 2), 16), parseInt(n.slice(2, 4), 16), parseInt(n.slice(4, 6), 16)];
-}
+const MESH_COLOR: [number, number, number] = [228, 234, 241];
+const MESH_BG: [number, number, number] = [36, 48, 64];
 
-export function orientedPartBounds(
-  mesh: StlMesh,
-  up: UpAxis,
-  rot: number,
-  mirror: boolean,
-): { count: number; radius: number } {
-  const p = mesh.positions;
-  let minX = Infinity,
-    minY = Infinity,
-    minZ = Infinity,
-    maxX = -Infinity,
-    maxY = -Infinity,
-    maxZ = -Infinity;
-  for (let g = 0; g < p.length; g += 3) {
-    const q = orientPoint(p[g], p[g + 1], p[g + 2], up, rot, mirror);
-    if (q[0] < minX) minX = q[0];
-    if (q[1] < minY) minY = q[1];
-    if (q[2] < minZ) minZ = q[2];
-    if (q[0] > maxX) maxX = q[0];
-    if (q[1] > maxY) maxY = q[1];
-    if (q[2] > maxZ) maxZ = q[2];
-  }
-  const radius = Math.hypot(maxX - minX, maxY - minY, maxZ - minZ) / 2 || 1;
-  return { count: mesh.count, radius };
-}
-
-function drawPart(
-  ctx: CanvasRenderingContext2D,
-  mesh: StlMesh,
-  up: UpAxis,
-  rot: number,
-  mirror: boolean,
-  W: number,
-  H: number,
-  az: number,
-  ax: number,
-  zoom: number,
-  color: string,
-) {
-  const p = mesh.positions;
-  const n = mesh.count;
-  const pts = new Float32Array(n * 9);
-  let minX = Infinity,
-    minY = Infinity,
-    minZ = Infinity,
-    maxX = -Infinity,
-    maxY = -Infinity,
-    maxZ = -Infinity;
-  for (let i = 0, g = 0; i < n * 9; i += 3, g += 3) {
-    const q = orientPoint(p[g], p[g + 1], p[g + 2], up, rot, mirror);
-    pts[i] = q[0];
-    pts[i + 1] = q[1];
-    pts[i + 2] = q[2];
-    if (q[0] < minX) minX = q[0];
-    if (q[1] < minY) minY = q[1];
-    if (q[2] < minZ) minZ = q[2];
-    if (q[0] > maxX) maxX = q[0];
-    if (q[1] > maxY) maxY = q[1];
-    if (q[2] > maxZ) maxZ = q[2];
-  }
-  const cx = (minX + maxX) / 2,
-    cy = (minY + maxY) / 2,
-    cz = (minZ + maxZ) / 2;
-  let maxR = 1;
-  for (let i = 0; i < pts.length; i += 3) {
-    maxR = Math.max(maxR, Math.hypot(pts[i] - cx, pts[i + 1] - cy, pts[i + 2] - cz));
-  }
-  const sc = (0.46 * Math.min(W, H) * zoom) / maxR;
-  const cs = Math.cos(az),
-    sn = Math.sin(az);
-  const ca = Math.cos(ax),
-    sa = Math.sin(ax);
-  const project = (x: number, y: number, z: number): [number, number, number] => {
-    const dx = x - cx,
-      dy = y - cy,
-      dz = z - cz;
-    const rx = dx * cs - dy * sn;
-    const ry = dx * sn + dy * cs;
-    const rz = ry * sa + dz * ca;
-    const py = ry * ca - dz * sa;
-    return [W / 2 + rx * sc, H / 2 - py * sc, rz];
-  };
-  const faces: Array<{ z: number; x0: number; y0: number; x1: number; y1: number; x2: number; y2: number; shade: number }> = [];
-  const step = Math.max(1, Math.floor(n / 8000));
-  for (let i = 0; i < n; i += step) {
-    const o = i * 9;
-    const A = project(pts[o], pts[o + 1], pts[o + 2]);
-    const B = project(pts[o + 3], pts[o + 4], pts[o + 5]);
-    const C = project(pts[o + 6], pts[o + 7], pts[o + 8]);
-    const ux = pts[o + 3] - pts[o],
-      uy = pts[o + 4] - pts[o + 1],
-      uz = pts[o + 5] - pts[o + 2];
-    const vx = pts[o + 6] - pts[o],
-      vy = pts[o + 7] - pts[o + 1],
-      vz = pts[o + 8] - pts[o + 2];
-    let nx = uy * vz - uz * vy,
-      ny = uz * vx - ux * vz,
-      nz = ux * vy - uy * vx;
-    const len = Math.hypot(nx, ny, nz) || 1;
-    const shade = 0.22 + 0.78 * Math.abs((nx * 0.2 + ny * 0.25 + nz * 0.85) / len);
-    faces.push({ z: (A[2] + B[2] + C[2]) / 3, x0: A[0], y0: A[1], x1: B[0], y1: B[1], x2: C[0], y2: C[1], shade });
-  }
-  faces.sort((a, b) => a.z - b.z);
-  const [r, g, b] = hex(color);
-  for (const f of faces) {
-    ctx.beginPath();
-    ctx.moveTo(f.x0, f.y0);
-    ctx.lineTo(f.x1, f.y1);
-    ctx.lineTo(f.x2, f.y2);
-    ctx.closePath();
-    ctx.fillStyle = `rgb(${(r * f.shade) | 0},${(g * f.shade) | 0},${(b * f.shade) | 0})`;
-    ctx.fill();
-  }
-}
+export { orientedPartBounds } from "./partView";
 
 export function PartViewport({
   objects,
@@ -161,20 +46,21 @@ export function PartViewport({
 
     const paint = () => {
       const dpr = window.devicePixelRatio || 1;
-      const W = Math.max(1, parent.clientWidth);
-      const H = Math.max(1, parent.clientHeight);
-      canvas.width = Math.max(1, Math.round(W * dpr));
-      canvas.height = Math.max(1, Math.round(H * dpr));
-      canvas.style.width = W + "px";
-      canvas.style.height = H + "px";
+      const box = parent.getBoundingClientRect();
+      const cssW = Math.max(1, box.width || PART_VIEW.w);
+      const cssH = Math.max(1, box.height || PART_VIEW.h);
+      const W = Math.max(1, Math.round(cssW * dpr));
+      const H = Math.max(1, Math.round(cssH * dpr));
+      if (canvas.width !== W) canvas.width = W;
+      if (canvas.height !== H) canvas.height = H;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.fillStyle = getComputedStyle(parent).backgroundColor || "#243040";
-      ctx.fillRect(0, 0, W, H);
       if (!current) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.fillStyle = "#243040";
+        ctx.fillRect(0, 0, W, H);
         ctx.fillStyle = "#8b9aab";
-        ctx.font = "13px sans-serif";
+        ctx.font = `${Math.round(13 * dpr)}px sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText("Sube un STL para ver la pieza", W / 2, H / 2);
@@ -182,8 +68,7 @@ export function PartViewport({
       }
       try {
         const mesh = meshFromBytes(current.buf);
-        drawPart(
-          ctx,
+        const frame = renderOrientedMesh(
           mesh,
           current.o.up,
           current.o.rot,
@@ -193,11 +78,19 @@ export function PartViewport({
           view.current.az,
           view.current.ax,
           view.current.zoom,
-          "#E4EAF1",
+          MESH_COLOR,
+          MESH_BG,
         );
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        const img = ctx.createImageData(frame.w, frame.h);
+        img.data.set(frame.data);
+        ctx.putImageData(img, 0, 0);
       } catch {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.fillStyle = "#243040";
+        ctx.fillRect(0, 0, W, H);
         ctx.fillStyle = "#8b9aab";
-        ctx.font = "13px sans-serif";
+        ctx.font = `${Math.round(13 * dpr)}px sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText("STL inválido", W / 2, H / 2);
@@ -259,7 +152,7 @@ export function PartViewport({
         </div>
       )}
       <div className="part-view">
-        <canvas ref={ref} />
+        <canvas ref={ref} width={PART_VIEW.w} height={PART_VIEW.h} />
       </div>
       <div className="orient-actions">
         <button

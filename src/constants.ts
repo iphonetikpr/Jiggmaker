@@ -28,7 +28,7 @@ export const DEFAULTS = {
   maxPrintBed: 250,
   rectW: 50,
   rectH: 30,
-  qty: 2,
+  qty: 1,
 } as const;
 
 export const HISTORY_KEY = "eufyJig.history.v1";

@@ -39,7 +39,7 @@ export function newObject(index: number): JobObject {
   return {
     id: "o" + Math.random().toString(36).slice(2, 9),
     name: index === 0 ? "rect" : "",
-    count: index === 0 ? DEFAULTS.qty : 1,
+    count: DEFAULTS.qty,
     up: "z+",
     rot: 0,
     mirror: false,

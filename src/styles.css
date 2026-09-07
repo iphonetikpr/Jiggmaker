@@ -275,7 +275,9 @@ select {
 
 .orient-card .part-view {
   position: relative;
+  width: 100%;
   height: 220px;
+  aspect-ratio: 260 / 220;
   border-radius: 10px;
   overflow: hidden;
   background: var(--surface-2);
@@ -292,6 +294,7 @@ select {
   display: block;
   width: 100%;
   height: 100%;
+  object-fit: contain;
   touch-action: none;
 }
 

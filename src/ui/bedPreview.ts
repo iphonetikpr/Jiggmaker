@@ -3,14 +3,31 @@ import type { JigResult, Loop, PlacedPiece } from "../types";
 
 /** Inner printable rect of jiggenerator.com `#bedSvgMini` / `#bedSvgStd`. */
 export type BedTemplate = {
+  id: string;
   file: string;
   imageW: number;
   imageH: number;
   inner: { x: number; y: number; w: number; h: number };
 };
 
+/** Official jiggenerator markup is dark-on-white; sit it on a white plate so branding is visible. */
+export function plantillaMarkup(svg: string): string {
+  const body = svg.trim().replace(/^<\?xml[^?]*\?>\s*/i, "");
+  if (/id=["']plantilla-bg["']/.test(body)) return body;
+  return body.replace(
+    /<svg([^>]*)>/i,
+    `<svg$1><rect id="plantilla-bg" x="0" y="0" width="100%" height="100%" fill="#ffffff"/>`,
+  );
+}
+
+export function plantillaHasBranding(svg: string): boolean {
+  const paths = svg.match(/<path/g)?.length ?? 0;
+  return svg.includes('id="Layer_2"') && svg.includes("9.485-7.478") && paths >= 20;
+}
+
 /** Official Mini plantilla (333×88). From jiggenerator `_{"333x88":{el:"bedSvgMini",...}}`. */
 export const BED_MINI: BedTemplate = {
+  id: "bedSvgMini",
   file: "bed-mini.svg",
   imageW: 1089.552,
   imageH: 323.158,
@@ -19,6 +36,7 @@ export const BED_MINI: BedTemplate = {
 
 /** Official Large/standard plantilla (333×418). */
 export const BED_STD: BedTemplate = {
+  id: "bedSvgStd",
   file: "bed-std.svg",
   imageW: 1085.983,
   imageH: 1284.553,
