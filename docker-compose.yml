@@ -1,0 +1,11 @@
+version: "3.3"
+
+services:
+  jiggmaker:
+    build: .
+    image: jiggmaker:local
+    container_name: jiggmaker
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    mem_limit: 256m
