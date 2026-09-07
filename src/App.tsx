@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DEFAULTS, HISTORY_FILENAME, MAX_OBJECTS } from "./constants";
+import { DEFAULTS, HISTORY_FILENAME, HISTORY_KEY, MAX_OBJECTS } from "./constants";
 import { generateJig } from "./cad/generate";
 import {
   applyHistorySettings,
@@ -418,7 +418,8 @@ export default function App() {
                   />
                 </div>
                 <p className="hint">
-                  localStorage <code>{`eufyJig.history.v1`}</code> · archivo <code>{HISTORY_FILENAME}</code>
+                  Misma clave <code>{HISTORY_KEY}</code> en Docker (NAS) y GitHub Pages. Cada origen tiene su propio
+                  almacén; usa Export/Import <code>{HISTORY_FILENAME}</code> para copiar jobs entre ellos.
                 </p>
                 {history.length === 0 && <div className="hint">No saved jobs yet.</div>}
                 {history.map((j) => (
@@ -643,6 +644,10 @@ export default function App() {
             <p>
               Importa la plantilla en eufyMake Studio a tamaño de cama, coloca el arte en los contornos, oculta la
               plantilla y usa Zero Point Alignment. El 0,0 de la plantilla es la esquina de registro.
+            </p>
+            <p>
+              <b>Jobs.</b> Se guardan en este navegador (<code>eufyJig.history.v1</code>), igual en Docker y en GitHub
+              Pages. Cada URL tiene su propio almacén: Export/Import JSON para copiar entre el NAS y Pages.
             </p>
             <button className="btn primary" type="button" onClick={() => setHelp(false)}>
               Entendido

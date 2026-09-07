@@ -5,6 +5,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+# Serve at / (do not set GITHUB_PAGES — that prefix is only for GitHub Pages).
 RUN npm run build
 
 FROM nginx:1.27-alpine

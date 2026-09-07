@@ -146,6 +146,7 @@ export function applyHistorySettings(raw: Record<string, unknown> | HistoryJob["
 
 export function loadHistory(): HistoryJob[] {
   try {
+    // Same key on NAS Docker and GitHub Pages. Storage is per-origin, not per path.
     return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
   } catch {
     return [];

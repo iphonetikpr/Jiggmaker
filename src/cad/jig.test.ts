@@ -3,7 +3,7 @@ import { DEFAULTS, FRAME_PLATE, HISTORY_KEY, MINI_BED, POCKET_DEPTH_EXTRA, SCALE
 import { toDXF } from "./dxf";
 import { exportBasename } from "./filename";
 import { generateJig } from "./generate";
-import { applyHistorySettings, defaultSettings, mergeImported, newObject, serializeJob } from "./history";
+import { applyHistorySettings, defaultSettings, loadHistory, mergeImported, newObject, saveHistory, serializeJob } from "./history";
 import { toAsciiSTL, toBinarySTL } from "./mesh";
 import { toSVG } from "./svg";
 import { makeBoxStl, parseSTL } from "./stl";
@@ -173,5 +173,12 @@ describe("history", () => {
     expect(restored.maxPrintBed).toBe(250);
     const { added } = mergeImported([], incoming);
     expect(added).toBe(1);
+  });
+
+  it("uses a path-independent localStorage key (NAS and Pages share the same API)", () => {
+    expect(HISTORY_KEY).toBe("eufyJig.history.v1");
+    const src = loadHistory.toString() + saveHistory.toString();
+    expect(src).toContain("HISTORY_KEY");
+    expect(src).not.toMatch(/location\.pathname|window\.location/);
   });
 });

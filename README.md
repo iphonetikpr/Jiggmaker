@@ -1,6 +1,8 @@
 # Jiggmaker
 
-Personal web app for **eufyMake E1** UV print jigs — Mini / Large / custom beds, Mini alignment-frame checkbox, laser DXF/SVG, a single PLA STL, and a Studio placement template. Built to run locally, including on a **Synology DS415+** via Docker.
+Personal web app for **eufyMake E1** UV print jigs — Mini / Large / custom beds, Mini alignment-frame checkbox, laser DXF/SVG, a single PLA STL, and a Studio placement template.
+
+**Dual deploy, same SPA:** day-to-day use is **Docker Compose on a Synology DS415+** (LAN, offline after the image is built). **GitHub Pages** is the public static demo — no backend. Both are client-side only.
 
 No files leave the browser. No accounts. No secrets.
 
@@ -43,6 +45,41 @@ npm run dev
 ```
 
 Open the Vite URL. Drop an STL or keep the default 50 × 30 mm rectangle, then download DXF/SVG/STL.
+
+## Saved jobs (NAS and Pages)
+
+Jobs use **`localStorage` key `eufyJig.history.v1`** and the same JSON shape (`eufyMake_jig_history.json`) on every host. Save / Load / Import / Export are identical in Docker and on GitHub Pages.
+
+`localStorage` is **per origin**, not per path:
+
+| Host | Origin | Shares jobs with |
+| --- | --- | --- |
+| NAS Docker (`http://<nas-ip>:8080`) | that NAS URL | only that origin |
+| GitHub Pages | `https://<user>.github.io` | other Pages apps on the same user site (same key) |
+| `npm run dev` | `http://localhost:5173` | that localhost port |
+
+Copy jobs between NAS and Pages with **Output → Export…** then **Import…** on the other host. STLs stored in a job travel inside that JSON (base64).
+
+## GitHub Pages (demo)
+
+Static files only. The workflow builds with `GITHUB_PAGES=true` so asset URLs are `/Jiggmaker/` (this repo name). Docker builds **omit** that flag and stay at `/`.
+
+### Enable once
+
+1. Merge to `main` (or run **Actions → GitHub Pages → Run workflow**).
+2. Repo **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+3. Open `https://iphonetikpr.github.io/Jiggmaker/` after the workflow is green.
+
+PRs still run the workflow to **build and test** the Pages bundle; they do not publish. A push to `main` (or a manual run) publishes.
+
+Local Pages-shaped build:
+
+```bash
+npm run build:pages
+npx vite preview
+```
+
+(`vite preview` uses the same `base`, so open the printed `/Jiggmaker/` URL.)
 
 ## Docker Compose on Synology DS415+
 
@@ -90,7 +127,8 @@ sudo docker-compose up -d --build
 
 - Image is ~nginx alpine + a static SPA. Idle RAM should stay well under the 256 MB `mem_limit`.
 - First build needs internet to pull `node:20-alpine` and `nginx:1.27-alpine`. After that it runs offline.
-- No volumes, no env files, no tokens. Jobs live in **your browser** (`localStorage`). Use **Output → Export…** for `eufyMake_jig_history.json` backups.
+- No volumes, no env files, no tokens. Do **not** set `GITHUB_PAGES` here — the container serves the app at `/`.
+- Jobs live in **this browser origin** (`localStorage` key `eufyJig.history.v1`). Use **Output → Export…** for `eufyMake_jig_history.json` backups or to move jobs to GitHub Pages.
 - DS415+ Docker UI is slow; prefer the SSH compose commands.
 
 ## Workflow (eufyMake Studio)
