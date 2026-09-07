@@ -62,6 +62,51 @@ export function bedImageDest(
   };
 }
 
+export interface BedView {
+  imgX: number;
+  imgY: number;
+  imgW: number;
+  imgH: number;
+  ox: number;
+  oy: number;
+  scX: number;
+  scY: number;
+}
+
+/**
+ * Fit the **entire** plantilla PNG (pink outline, QR, eufyMake, 0,0, A1)
+ * into the canvas, then map the inner blue rectangle to plate mm.
+ */
+export function fitBedView(
+  viewW: number,
+  viewH: number,
+  plateW: number,
+  plateH: number,
+  zoom: number,
+  panx: number,
+  pany: number,
+  template: typeof BED_TEMPLATE = BED_TEMPLATE,
+): BedView {
+  const pad = 20;
+  const imgScale0 = Math.min((viewW - pad) / template.imageW, (viewH - pad) / template.imageH);
+  const imgScale = Math.max(0.02, imgScale0 * zoom);
+  const imgW = template.imageW * imgScale;
+  const imgH = template.imageH * imgScale;
+  const imgX = (viewW - imgW) / 2 + panx;
+  const imgY = (viewH - imgH) / 2 + pany;
+  const { inner } = template;
+  return {
+    imgX,
+    imgY,
+    imgW,
+    imgH,
+    ox: imgX + inner.x * imgScale,
+    oy: imgY + inner.y * imgScale,
+    scX: (inner.w * imgScale) / plateW,
+    scY: (inner.h * imgScale) / plateH,
+  };
+}
+
 /** True STL outline when present; pocket loops otherwise (rect / fallback). */
 export function silhouetteLoopsOf(piece: PlacedPiece): Loop[] {
   return piece.art.length ? piece.art : piece.loops;

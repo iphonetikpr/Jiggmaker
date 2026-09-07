@@ -68,54 +68,51 @@ def main() -> None:
     draw = ImageDraw.Draw(img)
 
     outer = outer_plate_path()
-    draw.line(outer + [outer[0]], fill=PINK, width=3, joint="curve")
+    draw.line(outer + [outer[0]], fill=PINK, width=8, joint="curve")
 
-    draw.rectangle(INNER, outline=BLUE, width=2)
+    draw.rectangle(INNER, outline=BLUE, width=5)
 
     ox, oy = INNER[0], INNER[3]
-    arm = 44
-    draw.line([(ox, oy - arm), (ox, oy), (ox + arm, oy)], fill=BLUE, width=4)
+    arm = 64
+    draw.line([(ox, oy - arm), (ox, oy), (ox + arm, oy)], fill=BLUE, width=8)
     try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 28)
-        small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 22)
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 42)
+        small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 36)
+        vert = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 32)
     except OSError:
         font = ImageFont.load_default()
         small = font
-    draw.text((ox + 12, oy - 40), "0,0", fill=BLUE, font=small)
+        vert = font
+    draw.text((ox + 16, oy - 58), "0,0", fill=BLUE, font=small)
 
     gx, gy = INNER[2], INNER[3]
-    draw.line([(gx - arm, gy), (gx, gy), (gx, gy - arm)], fill=GREEN, width=4)
+    draw.line([(gx - arm, gy), (gx, gy), (gx, gy - arm)], fill=GREEN, width=8)
 
     cx = (INNER[0] + INNER[2]) / 2
     cy = (INNER[1] + INNER[3]) / 2
-    d = 34
+    d = 48
     diamond = [(cx, cy - d), (cx + d, cy), (cx, cy + d), (cx - d, cy), (cx, cy - d)]
-    draw.line(diamond, fill=BLUE, width=3)
+    draw.line(diamond, fill=BLUE, width=6)
     bbox = draw.textbbox((0, 0), "A1", font=font)
     tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
     draw.text((cx - tw / 2, cy - th / 2 - 2), "A1", fill=BLUE, font=font)
 
-    # Right rail: eufyMake + QR-like mark (outside the printable rectangle)
-    try:
-        vert = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 20)
-    except OSError:
-        vert = small
     label = "eufyMake"
-    tx = INNER[2] + 36
-    ty = INNER[1] + 28
+    tx = INNER[2] + 28
+    ty = INNER[1] + 16
     for ch in label:
         bb = draw.textbbox((0, 0), ch, font=vert)
         draw.text((tx, ty), ch, fill=BLUE, font=vert)
-        ty += bb[3] - bb[1] + 4
-    qr = 72
-    qx, qy = INNER[2] + 22, INNER[3] - qr - 18
-    draw.rectangle((qx, qy, qx + qr, qy + qr), outline=BLUE, width=2)
-    cell = 6
+        ty += bb[3] - bb[1] + 6
+    qr = 96
+    qx, qy = INNER[2] + 16, INNER[3] - qr - 12
+    draw.rectangle((qx, qy, qx + qr, qy + qr), outline=BLUE, width=4)
+    cell = 8
     for i in range(10):
         for j in range(10):
             if (i * 7 + j * 3 + i * j) % 3 == 0:
                 draw.rectangle(
-                    (qx + 6 + i * cell, qy + 6 + j * cell, qx + 10 + i * cell, qy + 10 + j * cell),
+                    (qx + 8 + i * cell, qy + 8 + j * cell, qx + 14 + i * cell, qy + 14 + j * cell),
                     fill=BLUE,
                 )
 

@@ -13,6 +13,7 @@ import {
   bedImageDest,
   bedTemplateUrl,
   bedToPlate,
+  fitBedView,
   plateToBed,
   plateViewSize,
   previewPlateOffset,
@@ -83,6 +84,21 @@ describe("plate mapping", () => {
     expect(innerTop).toBeCloseTo(oy, 8);
     expect(innerRight).toBeCloseTo(ox + plateW * sc, 8);
     expect(innerBottom).toBeCloseTo(oy + plateH * sc, 8);
+  });
+
+  it("fits the full plantilla (QR / eufyMake rail included) then maps the inner rect", () => {
+    const viewW = 1000,
+      viewH = 400,
+      plateW = 333,
+      plateH = 88;
+    const v = fitBedView(viewW, viewH, plateW, plateH, 1, 0, 0);
+    expect(v.imgX).toBeGreaterThanOrEqual(-0.5);
+    expect(v.imgY).toBeGreaterThanOrEqual(-0.5);
+    expect(v.imgX + v.imgW).toBeLessThanOrEqual(viewW + 0.5);
+    expect(v.imgY + v.imgH).toBeLessThanOrEqual(viewH + 0.5);
+    expect(v.ox).toBeCloseTo(v.imgX + (BED_TEMPLATE.inner.x / BED_TEMPLATE.imageW) * v.imgW, 6);
+    expect(v.oy + plateH * v.scY).toBeCloseTo(v.imgY + ((BED_TEMPLATE.inner.y + BED_TEMPLATE.inner.h) / BED_TEMPLATE.imageH) * v.imgH, 6);
+    expect(plateW * v.scX).toBeCloseTo((BED_TEMPLATE.inner.w / BED_TEMPLATE.imageW) * v.imgW, 6);
   });
 });
 

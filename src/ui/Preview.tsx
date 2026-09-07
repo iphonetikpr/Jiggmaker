@@ -1,11 +1,12 @@
 import { useEffect, useRef } from "react";
 import { LAYER_SVG } from "../constants";
 import type { Entity, JigResult, PreviewMode } from "../types";
+import bedTemplatePng from "../assets/bed-template.png";
 import {
-  BED_TEMPLATE,
-  bedImageDest,
+  type BedView,
   bedTemplateUrl,
   bedToPlate,
+  fitBedView,
   plateToBed,
   plateViewSize,
   silhouetteLoopsOf,
@@ -67,19 +68,19 @@ function drawEntities(
 function drawSilhouettes(
   ctx: CanvasRenderingContext2D,
   result: JigResult,
-  ox: number,
-  oy: number,
-  sc: number,
+  view: BedView,
   plateH: number,
   showNum: boolean,
 ) {
+  const { ox, oy, scX, scY } = view;
+  const sc = (scX + scY) / 2;
   const X = (x: number, y: number) => {
     const [px] = bedToPlate(result, x, y);
-    return ox + px * sc;
+    return ox + px * scX;
   };
   const Y = (x: number, y: number) => {
     const [, py] = bedToPlate(result, x, y);
-    return oy + (plateH - py) * sc;
+    return oy + (plateH - py) * scY;
   };
   for (const p of result.placed) {
     for (const loop of silhouetteLoopsOf(p)) {
@@ -110,19 +111,14 @@ function drawSilhouettes(
       ctx.font = `600 ${Math.max(11, 4.5 * sc)}px sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(p.label, ox + cx * sc, oy + (plateH - cy) * sc);
+      ctx.fillText(p.label, ox + cx * scX, oy + (plateH - cy) * scY);
     }
   }
 }
 
-function drawRuler(
-  ctx: CanvasRenderingContext2D,
-  ox: number,
-  oy: number,
-  plateW: number,
-  plateH: number,
-  sc: number,
-) {
+function drawRuler(ctx: CanvasRenderingContext2D, view: BedView, plateW: number, plateH: number) {
+  const { ox, oy, scX, scY } = view;
+  const sc = (scX + scY) / 2;
   ctx.save();
   ctx.strokeStyle = LAYER_SVG.SCORE;
   ctx.fillStyle = LAYER_SVG.SCORE;
@@ -134,8 +130,8 @@ function drawRuler(
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
   for (let mm = 0; mm <= plateW + 1e-6; mm += 10) {
-    const x = ox + mm * sc;
-    const y = oy + plateH * sc;
+    const x = ox + mm * scX;
+    const y = oy + plateH * scY;
     const isMajor = Math.abs(mm % major) < 1e-6;
     ctx.beginPath();
     ctx.moveTo(x, y);
@@ -147,7 +143,7 @@ function drawRuler(
   ctx.textBaseline = "middle";
   for (let mm = 0; mm <= plateH + 1e-6; mm += 10) {
     const x = ox;
-    const y = oy + (plateH - mm) * sc;
+    const y = oy + (plateH - mm) * scY;
     const isMajor = Math.abs(mm % major) < 1e-6 || mm === 0;
     ctx.beginPath();
     ctx.moveTo(x, y);
@@ -158,22 +154,13 @@ function drawRuler(
   ctx.restore();
 }
 
-function drawBedBackground(
-  ctx: CanvasRenderingContext2D,
-  img: HTMLImageElement | null,
-  ox: number,
-  oy: number,
-  plateW: number,
-  plateH: number,
-  sc: number,
-) {
+function drawBedBackground(ctx: CanvasRenderingContext2D, img: HTMLImageElement | null, view: BedView) {
   if (img && img.complete && img.naturalWidth > 0) {
-    const d = bedImageDest(BED_TEMPLATE, ox, oy, plateW, plateH, sc);
-    ctx.drawImage(img, d.x, d.y, d.w, d.h);
+    ctx.drawImage(img, view.imgX, view.imgY, view.imgW, view.imgH);
     return;
   }
   ctx.fillStyle = "rgba(26,34,44,0.9)";
-  ctx.fillRect(ox, oy, plateW * sc, plateH * sc);
+  ctx.fillRect(view.ox, view.oy, 333 * view.scX, 88 * view.scY);
 }
 
 function hex(c: string): [number, number, number] {
@@ -188,9 +175,7 @@ function viewSize(result: JigResult, _mode: PreviewMode): { w: number; h: number
 function drawMeshOnPlate(
   ctx: CanvasRenderingContext2D,
   result: JigResult,
-  ox: number,
-  oy: number,
-  sc: number,
+  view: BedView,
   plateH: number,
   az: number,
   ax: number,
@@ -198,6 +183,8 @@ function drawMeshOnPlate(
 ) {
   const tris = result.mesh;
   if (!tris.length) return;
+  const { ox, oy, scX, scY } = view;
+  const sc = (scX + scY) / 2;
   const cx = result.jig.w / 2,
     cy = result.jig.h / 2;
   const cs = Math.cos(az),
@@ -209,7 +196,7 @@ function drawMeshOnPlate(
       dy = y - cy;
     const rx = dx * cs - dy * sn + cx;
     const ry = dx * sn + dy * cs + cy;
-    return [ox + rx * sc, oy + (plateH - ry) * sc - z * lift, z];
+    return [ox + rx * scX, oy + (plateH - ry) * scY - z * lift, z];
   };
   const faces: Array<{ z: number; pts: number[]; shade: number }> = [];
   const step = Math.max(1, Math.floor(tris.length / 8000));
@@ -284,7 +271,7 @@ export function Preview({
       imgRef.current = img;
       paintRef.current();
     };
-    img.src = bedTemplateUrl();
+    img.src = bedTemplatePng || bedTemplateUrl();
     return () => {
       img.onload = null;
     };
@@ -308,59 +295,48 @@ export function Preview({
       if (!ctx) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
+      const plate = result ? viewSize(result, mode) : { w: 333, h: 88 };
+      const bv = fitBedView(W, H, plate.w, plate.h, view.current.zoom, view.current.panx, view.current.pany);
+      drawBedBackground(ctx, imgRef.current, bv);
       if (!result) {
-        drawBedBackground(ctx, imgRef.current, 24, 48, 333, 88, Math.min((W - 48) / 333, (H - 72) / 88));
         ctx.fillStyle = "#8b9aab";
         ctx.font = "14px sans-serif";
         ctx.fillText("Añade un objeto para previsualizar", 24, 36);
         return;
       }
-      const plate = viewSize(result, mode);
-      const dw = plate.w;
-      const dh = plate.h;
-      const sc0 = Math.min((W - 56) / dw, (H - 64) / dh);
-      const sc = sc0 * view.current.zoom;
-      const ox = (W - dw * sc) / 2 + view.current.panx;
-      const oy = (H - dh * sc) / 2 + view.current.pany;
-      drawBedBackground(ctx, imgRef.current, ox, oy, dw, dh, sc);
       if (mode === "template" || mode === "jig3d") {
-        drawRuler(ctx, ox, oy, dw, dh, sc);
+        drawRuler(ctx, bv, plate.w, plate.h);
       }
       if (mode === "jig3d") {
-        drawMeshOnPlate(ctx, result, ox, oy, sc, dh, view.current.az, view.current.ax, jigColor);
+        drawMeshOnPlate(ctx, result, bv, plate.h, view.current.az, view.current.ax, jigColor);
         return;
       }
       if (mode === "template") {
-        drawSilhouettes(ctx, result, ox, oy, sc, dh, showNum);
+        drawSilhouettes(ctx, result, bv, plate.h, showNum);
         return;
       }
       const ents = mode === "laserBase" ? result.laser.baseEntities : result.laser.pocketEntities;
-      drawEntities(ctx, ents, ox, oy, sc, dh, showNum);
+      drawEntities(ctx, ents, bv.ox, bv.oy, (bv.scX + bv.scY) / 2, plate.h, showNum);
     };
     paintRef.current = paint;
 
     const ro = new ResizeObserver(() => paint());
     ro.observe(parent);
 
-    const mmPerPx = () => {
+    const currentView = () => {
       const { result, mode } = latest.current;
-      if (!result) return 1;
       const rect = canvas.getBoundingClientRect();
-      const { w: dw, h: dh } = viewSize(result, mode);
-      const sc0 = Math.min((rect.width - 56) / dw, (rect.height - 64) / dh);
-      return sc0 * view.current.zoom;
+      const plate = result ? viewSize(result, mode) : { w: 333, h: 88 };
+      return { plate, bv: fitBedView(rect.width, rect.height, plate.w, plate.h, view.current.zoom, view.current.panx, view.current.pany) };
     };
 
     const hitLabel = (ev: PointerEvent) => {
       const { result, mode } = latest.current;
       if (!result || mode !== "template") return null;
       const rect = canvas.getBoundingClientRect();
-      const { w: dw, h: dh } = plateViewSize(result);
-      const sc = mmPerPx();
-      const ox = (rect.width - dw * sc) / 2 + view.current.panx;
-      const oy = (rect.height - dh * sc) / 2 + view.current.pany;
-      const px = (ev.clientX - rect.left - ox) / sc;
-      const py = dh - (ev.clientY - rect.top - oy) / sc;
+      const { plate, bv } = currentView();
+      const px = (ev.clientX - rect.left - bv.ox) / bv.scX;
+      const py = plate.h - (ev.clientY - rect.top - bv.oy) / bv.scY;
       const [x, y] = plateToBed(result, px, py);
       for (let i = result.placed.length - 1; i >= 0; i--) {
         const p = result.placed[i];
@@ -399,8 +375,12 @@ export function Preview({
         return;
       }
       if (drag.current.kind === "piece" && drag.current.label) {
-        const sc = mmPerPx();
-        latest.current.onMove(drag.current.label, (ev.clientX - drag.current.x) / sc, -(ev.clientY - drag.current.y) / sc);
+        const { bv } = currentView();
+        latest.current.onMove(
+          drag.current.label,
+          (ev.clientX - drag.current.x) / bv.scX,
+          -(ev.clientY - drag.current.y) / bv.scY,
+        );
         drag.current.x = ev.clientX;
         drag.current.y = ev.clientY;
       }

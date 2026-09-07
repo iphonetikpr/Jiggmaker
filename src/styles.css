@@ -257,11 +257,17 @@ select {
 
 .orient-card .part-view {
   position: relative;
-  height: 200px;
+  height: 220px;
   border-radius: 10px;
   overflow: hidden;
-  background: #0b1016;
+  background: var(--surface-2);
   border: 1px solid var(--border);
+}
+
+.orient-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .orient-card .part-view canvas {

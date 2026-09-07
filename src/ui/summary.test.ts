@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { DEFAULTS } from "../constants";
 import { generateJig } from "../cad/generate";
 import { defaultSettings, newObject } from "../cad/history";
+import { makeLStl } from "../cad/stl";
+import { meshFromBytes } from "../cad/prepare";
+import { orientedPartBounds } from "./PartViewport";
 import { flipUp, summaryBedLine, summaryJigSize, summaryPlateHint, truncateName } from "./summary";
 
 describe("summary helpers", () => {
@@ -40,5 +43,16 @@ describe("summary helpers", () => {
 
   it("reports default clearance lock", () => {
     expect(DEFAULTS.clearance).toBe(0.15);
+  });
+});
+
+describe("part orientation mesh", () => {
+  it("keeps a drawable radius for an uploaded L-shaped STL", () => {
+    const mesh = meshFromBytes(makeLStl(8));
+    const a = orientedPartBounds(mesh, "z+", 0, false);
+    const b = orientedPartBounds(mesh, "z-", 0, false);
+    expect(a.count).toBeGreaterThan(12);
+    expect(a.radius).toBeGreaterThan(10);
+    expect(b.radius).toBeGreaterThan(10);
   });
 });
