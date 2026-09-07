@@ -119,44 +119,6 @@ function drawSilhouettes(
   }
 }
 
-function drawRuler(ctx: CanvasRenderingContext2D, view: BedView, plateW: number, plateH: number) {
-  const { ox, oy, scX, scY } = view;
-  const sc = (scX + scY) / 2;
-  ctx.save();
-  ctx.strokeStyle = LAYER_SVG.SCORE;
-  ctx.fillStyle = LAYER_SVG.SCORE;
-  ctx.lineWidth = 1;
-  const tick = Math.max(3, 1.2 * sc);
-  const fontPx = Math.max(9, 3.1 * sc);
-  ctx.font = `${fontPx}px ui-monospace, SFMono-Regular, Menlo, sans-serif`;
-  const major = plateW >= 200 ? 50 : 25;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  for (let mm = 0; mm <= plateW + 1e-6; mm += 10) {
-    const x = ox + mm * scX;
-    const y = oy + plateH * scY;
-    const isMajor = Math.abs(mm % major) < 1e-6;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x, y + (isMajor ? tick * 2 : tick));
-    ctx.stroke();
-    if (isMajor) ctx.fillText(String(Math.round(mm)), x, y + tick * 2 + 1);
-  }
-  ctx.textAlign = "right";
-  ctx.textBaseline = "middle";
-  for (let mm = 0; mm <= plateH + 1e-6; mm += 10) {
-    const x = ox;
-    const y = oy + (plateH - mm) * scY;
-    const isMajor = Math.abs(mm % major) < 1e-6 || mm === 0;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x - (isMajor ? tick * 2 : tick), y);
-    ctx.stroke();
-    if (isMajor && mm > 0) ctx.fillText(String(Math.round(mm)), x - tick * 2 - 3, y);
-  }
-  ctx.restore();
-}
-
 function drawBedBackground(ctx: CanvasRenderingContext2D, img: HTMLImageElement | null, view: BedView) {
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(view.imgX, view.imgY, view.imgW, view.imgH);
@@ -318,9 +280,6 @@ export function Preview({
         ctx.font = "14px sans-serif";
         ctx.fillText("Añade un objeto para previsualizar", 24, 36);
         return;
-      }
-      if (mode === "template" || mode === "jig3d") {
-        drawRuler(ctx, bv, plate.w, plate.h);
       }
       if (mode === "jig3d") {
         drawMeshOnPlate(ctx, result, bv, plate.h, view.current.az, view.current.ax, jigColor);

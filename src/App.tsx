@@ -460,7 +460,8 @@ export default function App() {
           <div className="preview-card">
             <div className="preview-hd">
               <b>Preview</b>
-              <div className="seg">
+              <span className="sp" />
+              <div className="preview-tabs" role="tablist" aria-label="Preview">
                 {(
                   [
                     ["template", "Template"],
@@ -469,48 +470,61 @@ export default function App() {
                     ["laserBase", "Laser base"],
                   ] as Array<[PreviewMode, string]>
                 ).map(([id, lab]) => (
-                  <button key={id} type="button" className={preview === id ? "on" : ""} onClick={() => setPreview(id)}>
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={preview === id}
+                    className={preview === id ? "on" : ""}
+                    onClick={() => setPreview(id)}
+                  >
                     {lab}
                   </button>
                 ))}
               </div>
-              <span className="sp" />
-              <input type="color" value={jigColor} onChange={(e) => setJigColor(e.target.value)} title="color 3D" />
+              {preview === "jig3d" && (
+                <label className="jig-color">
+                  color
+                  <input type="color" value={jigColor} onChange={(e) => setJigColor(e.target.value)} title="color 3D" />
+                </label>
+              )}
             </div>
-            <div className="canvas-wrap">
-              <Preview
-                result={result}
-                mode={preview}
-                showNum={settings.showNum}
-                jigColor={jigColor}
-                resetToken={viewReset}
-                onMove={onMove}
-              />
-            </div>
-            <div className="preview-ft">
-              <p className="hint">Scroll to zoom, drag empty space to pan · Template: drag piece to reposition</p>
-              <div className="preview-actions">
+            <div className="preview-pad">
+              <div className="canvas-wrap">
+                <Preview
+                  result={result}
+                  mode={preview}
+                  showNum={settings.showNum}
+                  jigColor={jigColor}
+                  resetToken={viewReset}
+                  onMove={onMove}
+                />
+              </div>
+              <div className="preview-ft">
+                <p className="hint">
+                  Scroll to zoom, drag empty space to pan. In <b>Template</b> view, drag a piece to reposition it.
+                </p>
                 <button className="ghost" type="button" onClick={() => setViewReset((n) => n + 1)}>
                   Reset view
                 </button>
-                <button className="ghost" type="button" onClick={() => setMoves({})}>
+                <button className="ghost" type="button" onClick={() => setMoves({})} disabled={!Object.keys(moves).length}>
                   Reset positions
                 </button>
               </div>
-            </div>
-            <div className="legend">
-              <span>
-                <i style={{ borderColor: "var(--cut)" }} />
-                cut
-              </span>
-              <span>
-                <i style={{ borderColor: "var(--score)" }} />
-                score / registration
-              </span>
-              <span>
-                <i style={{ borderColor: "var(--bed)" }} />
-                bed edge
-              </span>
+              <div className="legend">
+                <span>
+                  <i style={{ borderColor: "var(--cut)" }} />
+                  cut
+                </span>
+                <span>
+                  <i style={{ borderColor: "var(--score)" }} />
+                  score / registration
+                </span>
+                <span>
+                  <i style={{ borderColor: "var(--bed)" }} />
+                  bed edge
+                </span>
+              </div>
             </div>
           </div>
 
