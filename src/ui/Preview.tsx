@@ -1,15 +1,17 @@
 import { useEffect, useRef } from "react";
 import { LAYER_SVG } from "../constants";
 import type { Entity, JigResult, PreviewMode } from "../types";
-import bedTemplatePng from "../assets/bed-template.png";
+import bedMiniUrl from "../assets/bed-mini.svg?url";
+import bedStdUrl from "../assets/bed-std.svg?url";
 import {
   type BedView,
-  bedTemplateUrl,
+  BED_STD,
   bedToPlate,
   fitBedView,
   plateToBed,
   plateViewSize,
   silhouetteLoopsOf,
+  templateForResult,
 } from "./bedPreview";
 
 function colorOf(e: Entity): string {
@@ -252,7 +254,8 @@ export function Preview({
   onMove: (label: string, dx: number, dy: number) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const imgRef = useRef<HTMLImageElement | null>(null);
+  const miniImg = useRef<HTMLImageElement | null>(null);
+  const stdImg = useRef<HTMLImageElement | null>(null);
   const view = useRef({ ...DEFAULT_VIEW });
   const drag = useRef<{ kind: "pan" | "orbit" | "piece" | null; x: number; y: number; label?: string }>({
     kind: null,
@@ -265,16 +268,17 @@ export function Preview({
   const paintRef = useRef<() => void>(() => {});
 
   useEffect(() => {
-    const img = new Image();
-    img.decoding = "async";
-    img.onload = () => {
-      imgRef.current = img;
-      paintRef.current();
+    const load = (src: string, slot: { current: HTMLImageElement | null }) => {
+      const img = new Image();
+      img.decoding = "async";
+      img.onload = () => {
+        slot.current = img;
+        paintRef.current();
+      };
+      img.src = src;
     };
-    img.src = bedTemplatePng || bedTemplateUrl();
-    return () => {
-      img.onload = null;
-    };
+    load(bedMiniUrl, miniImg);
+    load(bedStdUrl, stdImg);
   }, []);
 
   useEffect(() => {
@@ -296,8 +300,10 @@ export function Preview({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
       const plate = result ? viewSize(result, mode) : { w: 333, h: 88 };
-      const bv = fitBedView(W, H, plate.w, plate.h, view.current.zoom, view.current.panx, view.current.pany);
-      drawBedBackground(ctx, imgRef.current, bv);
+      const tmpl = templateForResult(result);
+      const bedImg = tmpl.file === BED_STD.file ? stdImg.current : miniImg.current;
+      const bv = fitBedView(W, H, plate.w, plate.h, view.current.zoom, view.current.panx, view.current.pany, tmpl);
+      drawBedBackground(ctx, bedImg, bv);
       if (!result) {
         ctx.fillStyle = "#8b9aab";
         ctx.font = "14px sans-serif";
@@ -327,7 +333,10 @@ export function Preview({
       const { result, mode } = latest.current;
       const rect = canvas.getBoundingClientRect();
       const plate = result ? viewSize(result, mode) : { w: 333, h: 88 };
-      return { plate, bv: fitBedView(rect.width, rect.height, plate.w, plate.h, view.current.zoom, view.current.panx, view.current.pany) };
+      return {
+        plate,
+        bv: fitBedView(rect.width, rect.height, plate.w, plate.h, view.current.zoom, view.current.panx, view.current.pany, templateForResult(result)),
+      };
     };
 
     const hitLabel = (ev: PointerEvent) => {

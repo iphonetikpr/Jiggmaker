@@ -193,12 +193,6 @@ export default function App() {
 
       <div className="shell">
         <aside className="controls">
-          <PartViewport
-            objects={objects}
-            stlMap={stlMap}
-            onChange={(id, p) => setObjects((list) => list.map((x) => (x.id === id ? { ...x, ...p } : x)))}
-          />
-          <SummaryCard result={result} />
           <div className="steps">
             {(["setup", "layout", "output"] as StepId[]).map((id) => (
               <button key={id} type="button" className={step === id ? "on" : ""} onClick={() => setStep(id)}>
@@ -460,6 +454,7 @@ export default function App() {
           )}
         </aside>
 
+        <div className="workspace">
         <div className="preview-col">
           {result.warn && <div className="warnbar">{result.warn}</div>}
           <div className="preview-card">
@@ -621,6 +616,15 @@ export default function App() {
               )}
             </div>
           </div>
+        </div>
+        <aside className="preview-rail">
+          <PartViewport
+            objects={objects}
+            stlMap={stlMap}
+            onChange={(id, p) => setObjects((list) => list.map((x) => (x.id === id ? { ...x, ...p } : x)))}
+          />
+          <SummaryCard result={result} />
+        </aside>
         </div>
       </div>
 

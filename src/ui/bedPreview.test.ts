@@ -2,13 +2,15 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { DEFAULTS, FRAME_PLATE, LARGE_BED, MINI_BED } from "../constants";
+import { DEFAULTS, FRAME_PLATE, LARGE_BED } from "../constants";
 import { generateJig } from "../cad/generate";
 import { defaultSettings, newObject } from "../cad/history";
 import { bboxOf } from "../cad/geom";
 import { makeLStl, parseSTL } from "../cad/stl";
 import type { JobSettings } from "../types";
 import {
+  BED_MINI,
+  BED_STD,
   BED_TEMPLATE,
   bedImageDest,
   bedTemplateUrl,
@@ -18,24 +20,33 @@ import {
   plateViewSize,
   previewPlateOffset,
   silhouetteLoopsOf,
+  templateForResult,
 } from "./bedPreview";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 describe("bed template asset", () => {
-  it("ships public/bed-template.png with the calibrated inner rectangle", () => {
-    const buf = readFileSync(resolve(root, "public", BED_TEMPLATE.file));
-    expect(buf.subarray(0, 8).toString("binary")).toBe("\x89PNG\r\n\x1a\n");
-    const w = buf.readUInt32BE(16);
-    const h = buf.readUInt32BE(20);
-    expect(w).toBe(BED_TEMPLATE.imageW);
-    expect(h).toBe(BED_TEMPLATE.imageH);
-    expect(BED_TEMPLATE.inner.w / BED_TEMPLATE.inner.h).toBeCloseTo(MINI_BED.w / MINI_BED.h, 8);
+  it("ships jiggenerator Mini/Standard plantilla SVGs with official inner rects", () => {
+    const mini = readFileSync(resolve(root, "public", BED_MINI.file), "utf8");
+    const std = readFileSync(resolve(root, "public", BED_STD.file), "utf8");
+    expect(mini).toContain('viewBox="0 0 1089.552 323.158"');
+    expect(std).toContain('viewBox="0 0 1085.983 1284.553"');
+    expect(mini).toContain("<svg");
+    expect(std).toContain("<svg");
+    expect(BED_MINI.inner).toEqual({ x: 37.889, y: 32.312, w: 935.447, h: 255.118 });
+    expect(BED_STD.inner).toEqual({ x: 34.195, y: 33.485, w: 935.698, h: 1218.787 });
   });
 
   it("prefixes the image URL with the Vite/Pages base", () => {
-    expect(bedTemplateUrl("/")).toBe("/bed-template.png");
-    expect(bedTemplateUrl("/Jiggmaker/")).toBe("/Jiggmaker/bed-template.png");
+    expect(bedTemplateUrl("bed-mini.svg", "/")).toBe("/bed-mini.svg");
+    expect(bedTemplateUrl("bed-mini.svg", "/Jiggmaker/")).toBe("/Jiggmaker/bed-mini.svg");
+  });
+
+  it("picks Mini vs Standard SVG from the bed", () => {
+    const mini = generateJig([newObject(0)], {}, defaultSettings(), {});
+    const large = generateJig([newObject(0)], {}, { ...defaultSettings(), bed: "333x418" }, {});
+    expect(templateForResult(mini)).toBe(BED_MINI);
+    expect(templateForResult(large)).toBe(BED_STD);
   });
 });
 

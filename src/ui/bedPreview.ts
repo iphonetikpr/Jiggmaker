@@ -1,20 +1,41 @@
 import { FRAME_PLATE } from "../constants";
 import type { JigResult, Loop, PlacedPiece } from "../types";
 
-/**
- * `public/bed-template.png` — inner blue rectangle is the printable coordinate
- * system. Pixel bounds match scripts/make-bed-template.py (8 px per Mini-mm).
- */
-export const BED_TEMPLATE = {
-  file: "bed-template.png",
-  imageW: 3048,
-  imageH: 896,
-  inner: { x: 96, y: 96, w: 2664, h: 704 },
-} as const;
+/** Inner printable rect of jiggenerator.com `#bedSvgMini` / `#bedSvgStd`. */
+export type BedTemplate = {
+  file: string;
+  imageW: number;
+  imageH: number;
+  inner: { x: number; y: number; w: number; h: number };
+};
 
-export function bedTemplateUrl(base = import.meta.env.BASE_URL || "/"): string {
+/** Official Mini plantilla (333×88). From jiggenerator `_{"333x88":{el:"bedSvgMini",...}}`. */
+export const BED_MINI: BedTemplate = {
+  file: "bed-mini.svg",
+  imageW: 1089.552,
+  imageH: 323.158,
+  inner: { x: 37.889, y: 32.312, w: 935.447, h: 255.118 },
+};
+
+/** Official Large/standard plantilla (333×418). */
+export const BED_STD: BedTemplate = {
+  file: "bed-std.svg",
+  imageW: 1085.983,
+  imageH: 1284.553,
+  inner: { x: 34.195, y: 33.485, w: 935.698, h: 1218.787 },
+};
+
+/** @deprecated use BED_MINI — kept so older tests/imports keep a Mini-shaped default. */
+export const BED_TEMPLATE = BED_MINI;
+
+export function templateForResult(result: JigResult | null): BedTemplate {
+  if (result?.bed.id === "333x418") return BED_STD;
+  return BED_MINI;
+}
+
+export function bedTemplateUrl(file: string, base = import.meta.env.BASE_URL || "/"): string {
   const prefix = base.endsWith("/") ? base : `${base}/`;
-  return `${prefix}${BED_TEMPLATE.file}`;
+  return `${prefix}${file}`;
 }
 
 /** Canvas size of the current plate: Mini 333×88, Frame ON 334×90, Large/custom bed. */
@@ -42,9 +63,9 @@ export function plateToBed(result: JigResult, x: number, y: number): [number, nu
   return [x - o.x, y - o.y];
 }
 
-/** Draw the bed PNG so the inner blue rectangle maps onto the plate rect. */
+/** Draw the plantilla so the inner printable rectangle maps onto the plate rect. */
 export function bedImageDest(
-  template: typeof BED_TEMPLATE,
+  template: BedTemplate,
   ox: number,
   oy: number,
   plateW: number,
@@ -73,10 +94,7 @@ export interface BedView {
   scY: number;
 }
 
-/**
- * Fit the **entire** plantilla PNG (pink outline, QR, eufyMake, 0,0, A1)
- * into the canvas, then map the inner blue rectangle to plate mm.
- */
+/** Fit the full plantilla (QR + eufyMake rail) then map the inner rect to plate mm. */
 export function fitBedView(
   viewW: number,
   viewH: number,
@@ -85,7 +103,7 @@ export function fitBedView(
   zoom: number,
   panx: number,
   pany: number,
-  template: typeof BED_TEMPLATE = BED_TEMPLATE,
+  template: BedTemplate = BED_MINI,
 ): BedView {
   const pad = 20;
   const imgScale0 = Math.min((viewW - pad) / template.imageW, (viewH - pad) / template.imageH);
