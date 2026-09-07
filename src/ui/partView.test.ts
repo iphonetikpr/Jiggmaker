@@ -13,7 +13,7 @@ describe("orientation camera", () => {
     expect(PART_VIEW.w).toBe(260);
     expect(PART_VIEW.h).toBe(220);
     const sc = partViewScale(260, 220, 10, 1);
-    expect(sc).toBeCloseTo((0.55 * 220) / 10, 8);
+    expect(sc).toBeCloseTo((0.46 * 220) / 10, 8);
     expect(partViewScale(520, 440, 10, 1)).toBeCloseTo(sc * 2, 8);
   });
 

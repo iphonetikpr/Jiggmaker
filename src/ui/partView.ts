@@ -7,7 +7,7 @@ export const PART_VIEW = { w: 260, h: 220 } as const;
 
 /** Uniform (non-stretching) fit: one scale from the shorter canvas side. */
 export function partViewScale(viewW: number, viewH: number, radius: number, zoom: number): number {
-  return (0.55 * Math.min(viewW, viewH) * Math.max(0.01, zoom)) / (radius || 1);
+  return (0.46 * Math.min(viewW, viewH) * Math.max(0.01, zoom)) / (radius || 1);
 }
 
 /** Orthographic orbit. Same scale on X and Y so the mesh is never squashed. */
@@ -138,12 +138,11 @@ export function renderOrientedMesh(
     radius = Math.max(radius, Math.hypot(pts[i] - cx, pts[i + 1] - cy, pts[i + 2] - cz));
   }
   const sc = partViewScale(W, H, radius, zoom);
-  const light: Rgb = [0.35, 0.55, 0.8];
+  const light: Rgb = [0.35, 0.55, 0.85];
   const lightLen = Math.hypot(light[0], light[1], light[2]) || 1;
   const lx = light[0] / lightLen,
     ly = light[1] / lightLen,
     lz = light[2] / lightLen;
-  const zSpan = maxZ - minZ || 1;
 
   for (let t = 0; t < n; t++) {
     const o = t * 9;
@@ -165,8 +164,7 @@ export function renderOrientedMesh(
     const nlen = Math.hypot(nx, ny, nz) || 1;
     const [vnX, vnY, vnZ] = rotateNormal(nx / nlen, ny / nlen, nz / nlen, az, ax);
     const lambert = Math.abs(vnX * lx + vnY * ly + vnZ * lz);
-    const heightTint = 0.52 + (0.48 * ((pts[o + 2] + pts[o + 5] + pts[o + 8]) / 3 - minZ)) / zSpan;
-    const shade = (0.32 + 0.68 * lambert) * heightTint;
+    const shade = 0.28 + 0.72 * lambert;
     const cr = color[0] * shade,
       cg = color[1] * shade,
       cb = color[2] * shade;
