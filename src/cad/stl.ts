@@ -152,3 +152,41 @@ export function makeBoxStl(w: number, h: number, d: number): ArrayBuffer {
   }
   return buf;
 }
+
+/** L-footprint prism (40×15 bar + 15×30 stem) for silhouette tests. */
+export function makeLStl(d = 8): ArrayBuffer {
+  return mergeBinaryStl([makeBoxStl(40, 15, d), makeBoxStl(15, 30, d)]);
+}
+
+function mergeBinaryStl(bufs: ArrayBuffer[]): ArrayBuffer {
+  const meshes = bufs.map(parseSTL);
+  const n = meshes.reduce((s, m) => s + m.count, 0);
+  const out = new ArrayBuffer(84 + 50 * n);
+  const view = new DataView(out);
+  view.setUint32(80, n, true);
+  let o = 84;
+  for (const m of meshes) {
+    const p = m.positions;
+    for (let i = 0; i < m.count; i++) {
+      const g = i * 9;
+      const ux = p[g + 3] - p[g],
+        uy = p[g + 4] - p[g + 1],
+        uz = p[g + 5] - p[g + 2];
+      const vx = p[g + 6] - p[g],
+        vy = p[g + 7] - p[g + 1],
+        vz = p[g + 8] - p[g + 2];
+      let nx = uy * vz - uz * vy,
+        ny = uz * vx - ux * vz,
+        nz = ux * vy - uy * vx;
+      const len = Math.hypot(nx, ny, nz) || 1;
+      view.setFloat32(o, nx / len, true);
+      view.setFloat32(o + 4, ny / len, true);
+      view.setFloat32(o + 8, nz / len, true);
+      o += 12;
+      for (let k = 0; k < 9; k++, o += 4) view.setFloat32(o, p[g + k], true);
+      view.setUint16(o, 0, true);
+      o += 2;
+    }
+  }
+  return out;
+}

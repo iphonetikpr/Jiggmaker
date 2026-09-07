@@ -6,7 +6,7 @@ import { generateJig } from "./generate";
 import { applyHistorySettings, defaultSettings, loadHistory, mergeImported, newObject, saveHistory, serializeJob } from "./history";
 import { toAsciiSTL, toBinarySTL } from "./mesh";
 import { toSVG } from "./svg";
-import { makeBoxStl, parseSTL } from "./stl";
+import { makeBoxStl, makeLStl, parseSTL } from "./stl";
 import type { JobSettings } from "../types";
 
 function rectJob(patch: Partial<JobSettings> = {}) {
@@ -115,6 +115,20 @@ describe("STL silhouette", () => {
     const r = generateJig([obj], { [obj.id]: buf }, settings, {});
     expect(r.objects[0].w).toBeGreaterThan(29);
     expect(r.totalUnits).toBe(1);
+  });
+
+  it("L-shaped STL keeps a non-rectangular art outline", () => {
+    const buf = makeLStl(8);
+    const settings = defaultSettings();
+    const obj = newObject(0);
+    obj.name = "ell";
+    obj.mode = "silhouette";
+    obj.stlName = "ell";
+    obj.count = 1;
+    const r = generateJig([obj], { [obj.id]: buf }, settings, {});
+    const art = r.placed[0].art;
+    expect(art[0].length).toBeGreaterThan(4);
+    expect(r.template.entities.some((e) => e.layer === "CUT" && (e.points?.length || 0) > 4)).toBe(true);
   });
 });
 
