@@ -34,7 +34,15 @@ describe("locked constants", () => {
     expect(DEFAULTS.dpi).toBe(300);
     expect(DEFAULTS.clearance).toBe(0.15);
     expect(DEFAULTS.maxPrintBed).toBe(250);
+    expect(DEFAULTS.qty).toBe(1);
     expect(HISTORY_KEY).toBe("eufyJig.history.v1");
+  });
+
+  it("starts a single object at quantity 1", () => {
+    expect(newObject(0).count).toBe(1);
+    expect(newObject(1).count).toBe(1);
+    const fresh = generateJig([newObject(0)], {}, defaultSettings(), {});
+    expect(fresh.totalUnits).toBe(1);
   });
 });
 

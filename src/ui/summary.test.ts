@@ -4,7 +4,7 @@ import { generateJig } from "../cad/generate";
 import { defaultSettings, newObject } from "../cad/history";
 import { makeLStl } from "../cad/stl";
 import { meshFromBytes } from "../cad/prepare";
-import { orientedPartBounds } from "./PartViewport";
+import { orientedPartBounds } from "./partView";
 import { flipUp, summaryBedLine, summaryJigSize, summaryPlateHint, truncateName } from "./summary";
 
 describe("summary helpers", () => {

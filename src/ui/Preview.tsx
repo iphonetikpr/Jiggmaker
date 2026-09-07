@@ -1,13 +1,14 @@
 import { useEffect, useRef } from "react";
 import { LAYER_SVG } from "../constants";
 import type { Entity, JigResult, PreviewMode } from "../types";
-import bedMiniUrl from "../assets/bed-mini.svg?url";
-import bedStdUrl from "../assets/bed-std.svg?url";
+import bedMiniSvg from "../assets/bed-mini.svg?raw";
+import bedStdSvg from "../assets/bed-std.svg?raw";
 import {
   type BedView,
   BED_STD,
   bedToPlate,
   fitBedView,
+  plantillaMarkup,
   plateToBed,
   plateViewSize,
   silhouetteLoopsOf,
@@ -157,12 +158,14 @@ function drawRuler(ctx: CanvasRenderingContext2D, view: BedView, plateW: number,
 }
 
 function drawBedBackground(ctx: CanvasRenderingContext2D, img: HTMLImageElement | null, view: BedView) {
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(view.imgX, view.imgY, view.imgW, view.imgH);
   if (img && img.complete && img.naturalWidth > 0) {
     ctx.drawImage(img, view.imgX, view.imgY, view.imgW, view.imgH);
     return;
   }
-  ctx.fillStyle = "rgba(26,34,44,0.9)";
-  ctx.fillRect(view.ox, view.oy, 333 * view.scX, 88 * view.scY);
+  ctx.strokeStyle = "rgba(26,34,44,0.35)";
+  ctx.strokeRect(view.ox, view.oy, 333 * view.scX, 88 * view.scY);
 }
 
 function hex(c: string): [number, number, number] {
@@ -268,17 +271,23 @@ export function Preview({
   const paintRef = useRef<() => void>(() => {});
 
   useEffect(() => {
-    const load = (src: string, slot: { current: HTMLImageElement | null }) => {
+    const urls: string[] = [];
+    const load = (markup: string, slot: { current: HTMLImageElement | null }) => {
       const img = new Image();
       img.decoding = "async";
+      const url = URL.createObjectURL(new Blob([plantillaMarkup(markup)], { type: "image/svg+xml" }));
+      urls.push(url);
       img.onload = () => {
         slot.current = img;
         paintRef.current();
       };
-      img.src = src;
+      img.src = url;
     };
-    load(bedMiniUrl, miniImg);
-    load(bedStdUrl, stdImg);
+    load(bedMiniSvg, miniImg);
+    load(bedStdSvg, stdImg);
+    return () => {
+      for (const url of urls) URL.revokeObjectURL(url);
+    };
   }, []);
 
   useEffect(() => {
