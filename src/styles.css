@@ -495,19 +495,81 @@ select {
 .preview-hd {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
+  gap: 10px;
+  padding: 14px 16px 0;
   flex-wrap: wrap;
+}
+
+.preview-hd b {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.preview-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.preview-tabs button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 6px 11px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.preview-tabs button.on {
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 650;
+}
+
+.jig-color {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.jig-color input {
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.preview-pad {
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .canvas-wrap {
   position: relative;
   flex: 1;
-  min-height: 520px;
-  background:
-    radial-gradient(circle at 1px 1px, rgba(232, 238, 244, 0.05) 1px, transparent 0) 0 0 / 18px 18px,
-    #121820;
+  min-height: clamp(430px, 52vh, 620px);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: grab;
+  background-color: #121820;
+  background-image: radial-gradient(rgba(232, 238, 244, 0.11) 1.15px, transparent 1.2px);
+  background-size: 19px 19px;
+  background-position: center;
+}
+
+.canvas-wrap:active {
+  cursor: grabbing;
 }
 
 .canvas-wrap canvas {
@@ -533,20 +595,25 @@ select {
 .preview-ft {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  padding: 8px 12px 0;
+  margin-top: 10px;
 }
 
 .preview-ft .hint {
   margin: 0;
   flex: 1;
-  min-width: 180px;
+  min-width: 170px;
 }
 
-.preview-actions {
-  display: flex;
-  gap: 8px;
+.preview-ft .hint b {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.preview-ft .ghost {
+  flex: 0 0 auto;
+  padding: 6px 11px;
 }
 
 .legend {
@@ -554,7 +621,8 @@ select {
   gap: 14px;
   font-size: 12px;
   color: var(--muted);
-  padding: 8px 12px 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
 }
 
 .legend i {
