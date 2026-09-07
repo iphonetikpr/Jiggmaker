@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Jiggmaker — UI shell</title>
+<style>
+  :root {
+    --bg: #0F1419;
+    --surface: #1A222C;
+    --surface-2: #243040;
+    --border: #2E3A4A;
+    --text: #E8EEF4;
+    --muted: #8B9AAB;
+    --accent: #3DDC97;
+    --accent-2: #5B8DEF;
+    --cut: #E74C3C;
+    --score: #3B82F6;
+    --bed: #6B7280;
+    --warn: #F5A623;
+    --danger: #EF4444;
+    --ok: #22C55E;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --font: Inter, system-ui, -apple-system, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header.app {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 18px;
+  }
+  .brand .mark {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  }
+  .badge {
+    font-size: 11px;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(280px, 380px) 1fr;
+    min-height: calc(100vh - 53px);
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+  aside {
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    overflow: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .steps {
+    display: flex;
+    gap: 4px;
+    background: var(--bg);
+    padding: 4px;
+    border-radius: var(--radius-sm);
+  }
+  .steps button {
+    flex: 1;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    padding: 8px 10px;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .steps button.active {
+    background: var(--surface-2);
+    color: var(--text);
+    box-shadow: inset 0 -2px 0 var(--accent);
+  }
+  .card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 14px;
+  }
+  .card h3 {
+    margin: 0 0 12px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  label.field {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 13px;
+  }
+  label.field span {
+    display: block;
+    color: var(--muted);
+    margin-bottom: 4px;
+    font-size: 12px;
+  }
+  select, input[type="text"], input[type="number"] {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    font: inherit;
+    font-size: 14px;
+  }
+  select:focus, input:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .check input { accent-color: var(--accent); width: 16px; height: 16px; }
+  .pill {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 600;
+    color: #0F1419;
+    background: var(--ok);
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .btn {
+    border: 0;
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font: inherit;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .btn-primary { background: var(--accent); color: #0F1419; width: 100%; }
+  .btn-ghost {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .warn {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background: rgba(245, 166, 35, 0.12);
+    border: 1px solid rgba(245, 166, 35, 0.35);
+    color: var(--warn);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  main.preview {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 480px;
+  }
+  .preview-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .chip {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .chip.on { color: var(--text); background: var(--surface-2); }
+  .legend { display: flex; gap: 12px; margin-left: auto; font-size: 12px; color: var(--muted); }
+  .legend i {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+  .stage {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    position: relative;
+    overflow: hidden;
+    min-height: 420px;
+    display: grid;
+    place-items: center;
+  }
+  .bed {
+    width: min(92%, 720px);
+    aspect-ratio: 334 / 90;
+    background: #121820;
+    border: 2px dashed var(--bed);
+    border-radius: 14px;
+    position: relative;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03);
+  }
+  .plate {
+    position: absolute;
+    inset: 8% 4%;
+    background: linear-gradient(180deg, #2a3544, #1e2733);
+    border-radius: 12px;
+    border: 1.5px solid var(--cut);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  }
+  .pocket {
+    position: absolute;
+    width: 14%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: 2px solid var(--score);
+    background: rgba(59, 130, 246, 0.12);
+    top: 28%;
+  }
+  .pocket:nth-child(1) { left: 12%; }
+  .pocket:nth-child(2) { left: 32%; }
+  .pocket:nth-child(3) { left: 52%; }
+  .pocket:nth-child(4) { left: 72%; }
+  .meta {
+    position: absolute;
+    left: 16px; bottom: 14px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .shell-note {
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    padding-bottom: 8px;
+  }
+</style>
+</head>
+<body>
+  <header class="app">
+    <div class="brand"><span class="mark"></span> Jiggmaker <span class="badge">UI shell · tokens v1</span></div>
+    <button class="btn btn-ghost" type="button">Export JSON</button>
+  </header>
+  <div class="layout">
+    <aside>
+      <div class="steps">
+        <button class="active" type="button">Setup</button>
+        <button type="button">Layout</button>
+        <button type="button">Output</button>
+      </div>
+
+      <div class="card">
+        <h3>Bed</h3>
+        <label class="field"><span>Flatbed</span>
+          <select>
+            <option selected>Mini · 333 × 88 mm</option>
+            <option>Large · 333 × 418 mm</option>
+            <option>Custom…</option>
+          </select>
+        </label>
+        <label class="check">
+          <input type="checkbox" checked />
+          Alignment frame
+          <span class="pill">usando frame</span>
+        </label>
+      </div>
+
+      <div class="card">
+        <h3>Objects · hasta 3</h3>
+        <label class="field"><span>Pocket shape</span>
+          <select><option>Silhouette</option><option>Rectangle</option></select>
+        </label>
+        <div class="row">
+          <label class="field"><span>Qty</span><input type="number" value="4" /></label>
+          <label class="field"><span>Clearance</span><input type="number" value="0.15" step="0.01" /></label>
+        </div>
+        <button class="btn btn-ghost" type="button" style="width:100%">+ Add object</button>
+      </div>
+
+      <div class="warn">
+        Placa 334 mm &gt; maxPrintBed 250 — imprimir en H2 o activar split.
+      </div>
+
+      <button class="btn btn-primary" type="button">Generate jig</button>
+    </aside>
+
+    <main class="preview">
+      <div class="preview-toolbar">
+        <span class="chip on">Template</span>
+        <span class="chip">3D jig</span>
+        <span class="chip">Laser pocket</span>
+        <span class="chip">Laser base</span>
+        <div class="legend">
+          <span><i style="background:var(--cut)"></i>cut</span>
+          <span><i style="background:var(--score)"></i>score</span>
+          <span><i style="background:var(--bed)"></i>bed</span>
+        </div>
+      </div>
+      <div class="stage">
+        <div class="bed">
+          <div class="plate">
+            <div class="pocket"></div>
+            <div class="pocket"></div>
+            <div class="pocket"></div>
+            <div class="pocket"></div>
+          </div>
+        </div>
+        <div class="meta">Mini + frame · 334 × 90 mm · mock preview</div>
+      </div>
+      <p class="shell-note">Shell visual (sin CAD). Artoo conecta exports y nesting reales.</p>
+    </main>
+  </div>
+</body>
+</html>
