@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import type { JobObject } from "../types";
 import { OBJECT_COLORS } from "../constants";
+import { NumberField } from "./NumberField";
 
 export function ObjectCard({
   obj,
@@ -43,13 +44,7 @@ export function ObjectCard({
           style={{ flex: 1, width: "auto" }}
         />
         <span style={{ color: "var(--muted)", fontFamily: "var(--mono)" }}>qty</span>
-        <input
-          type="number"
-          min={1}
-          step={1}
-          value={obj.count}
-          onChange={(e) => onChange({ count: Math.max(1, +e.target.value || 1) })}
-        />
+        <NumberField min={1} step={1} value={obj.count} onChange={(count) => onChange({ count })} aria-label="qty" />
       </div>
       <div
         className="drop"
@@ -90,19 +85,19 @@ export function ObjectCard({
       </div>
       <div className="row">
         <label>Ancho × alto mm</label>
-        <input
-          type="number"
+        <NumberField
           min={1}
           step={0.1}
           value={obj.rectW}
-          onChange={(e) => onChange({ rectW: +e.target.value || 1, mode: obj.stlName ? obj.mode : "rectangle" })}
+          onChange={(rectW) => onChange({ rectW, mode: obj.stlName ? obj.mode : "rectangle" })}
+          aria-label="Ancho mm"
         />
-        <input
-          type="number"
+        <NumberField
           min={1}
           step={0.1}
           value={obj.rectH}
-          onChange={(e) => onChange({ rectH: +e.target.value || 1, mode: obj.stlName ? obj.mode : "rectangle" })}
+          onChange={(rectH) => onChange({ rectH, mode: obj.stlName ? obj.mode : "rectangle" })}
+          aria-label="Alto mm"
         />
       </div>
       <div className="row">
@@ -156,13 +151,13 @@ export function ObjectCard({
       </div>
       <div className="row">
         <label>Clearance mm</label>
-        <input
-          type="number"
+        <NumberField
           min={0}
           max={3}
           step={0.05}
           value={obj.clear}
-          onChange={(e) => onChange({ clear: +e.target.value || 0 })}
+          onChange={(clear) => onChange({ clear })}
+          aria-label="Clearance mm"
         />
       </div>
       <div className="row">

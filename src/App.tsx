@@ -23,10 +23,12 @@ import {
 import { renderTemplatePng } from "./cad/png";
 import { parseSTL } from "./cad/stl";
 import type { HistoryJob, JobObject, JobSettings, PreviewMode, StepId } from "./types";
+import { NumberField } from "./ui/NumberField";
 import { ObjectCard } from "./ui/ObjectCard";
 import { PartViewport } from "./ui/PartViewport";
 import { Preview } from "./ui/Preview";
 import { SummaryCard } from "./ui/SummaryCard";
+import { ThemeToggle } from "./ui/ThemeToggle";
 
 export default function App() {
   const [step, setStep] = useState<StepId>("setup");
@@ -186,6 +188,7 @@ export default function App() {
           Jiggmaker <span>· eufyMake E1</span>
         </h1>
         <span className="sp" />
+        <ThemeToggle />
         <button className="ghost" type="button" onClick={() => setHelp(true)}>
           Cómo funciona
         </button>
@@ -254,8 +257,8 @@ export default function App() {
                 {settings.bed === "custom" && (
                   <div className="row">
                     <label>W × H mm</label>
-                    <input type="number" min={10} value={settings.bedW} onChange={(e) => patchSettings({ bedW: +e.target.value })} />
-                    <input type="number" min={10} value={settings.bedH} onChange={(e) => patchSettings({ bedH: +e.target.value })} />
+                    <NumberField min={10} value={settings.bedW} onChange={(bedW) => patchSettings({ bedW })} aria-label="Bed width mm" />
+                    <NumberField min={10} value={settings.bedH} onChange={(bedH) => patchSettings({ bedH })} aria-label="Bed height mm" />
                   </div>
                 )}
                 {mini && (
@@ -293,22 +296,22 @@ export default function App() {
               </label>
               <div className="row">
                 <label>Spacing X / Y mm</label>
-                <input type="number" min={0} step={0.5} value={settings.spacingX} onChange={(e) => patchSettings({ spacingX: +e.target.value })} />
-                <input type="number" min={0} step={0.5} value={settings.spacingY} onChange={(e) => patchSettings({ spacingY: +e.target.value })} />
+                <NumberField min={0} step={0.5} value={settings.spacingX} onChange={(spacingX) => patchSettings({ spacingX })} aria-label="Spacing X mm" />
+                <NumberField min={0} step={0.5} value={settings.spacingY} onChange={(spacingY) => patchSettings({ spacingY })} aria-label="Spacing Y mm" />
               </div>
               <div className="row">
                 <label>Margin X / Y mm</label>
-                <input type="number" min={0} step={0.5} value={settings.marginX} onChange={(e) => patchSettings({ marginX: +e.target.value })} />
-                <input type="number" min={0} step={0.5} value={settings.marginY} onChange={(e) => patchSettings({ marginY: +e.target.value })} />
+                <NumberField min={0} step={0.5} value={settings.marginX} onChange={(marginX) => patchSettings({ marginX })} aria-label="Margin X mm" />
+                <NumberField min={0} step={0.5} value={settings.marginY} onChange={(marginY) => patchSettings({ marginY })} aria-label="Margin Y mm" />
               </div>
               <div className="row">
                 <label>Gap entre objetos mm</label>
-                <input type="number" min={0} step={0.5} value={settings.objGap} onChange={(e) => patchSettings({ objGap: +e.target.value })} />
+                <NumberField min={0} step={0.5} value={settings.objGap} onChange={(objGap) => patchSettings({ objGap })} aria-label="Gap entre objetos mm" />
               </div>
               {settings.nest && (
                 <div className="row">
                   <label>Row offset %</label>
-                  <input type="number" min={0} max={100} step={5} value={settings.offsetPct} onChange={(e) => patchSettings({ offsetPct: +e.target.value })} />
+                  <NumberField min={0} max={100} step={5} value={settings.offsetPct} onChange={(offsetPct) => patchSettings({ offsetPct })} aria-label="Row offset percent" />
                 </div>
               )}
               <div className="row">
@@ -331,11 +334,11 @@ export default function App() {
                 <h2>Jig 3D (PLA)</h2>
                 <div className="row">
                   <label>Base thickness mm</label>
-                  <input type="number" min={0} step={0.2} value={settings.baseThk} onChange={(e) => patchSettings({ baseThk: +e.target.value })} />
+                  <NumberField min={0} step={0.2} value={settings.baseThk} onChange={(baseThk) => patchSettings({ baseThk })} aria-label="Base thickness mm" />
                 </div>
                 <div className="row">
                   <label>Pocket depth mm</label>
-                  <input type="number" min={0.5} step={0.5} value={settings.pocketDepth} onChange={(e) => patchSettings({ pocketDepth: +e.target.value })} />
+                  <NumberField min={0.5} step={0.5} value={settings.pocketDepth} onChange={(pocketDepth) => patchSettings({ pocketDepth })} aria-label="Pocket depth mm" />
                 </div>
                 <label className="chk">
                   <input type="checkbox" checked={settings.scaleComp} onChange={(e) => patchSettings({ scaleComp: e.target.checked })} />
@@ -347,7 +350,7 @@ export default function App() {
                 </p>
                 <div className="row">
                   <label>maxPrintBed mm</label>
-                  <input type="number" min={100} step={1} value={settings.maxPrintBed} onChange={(e) => patchSettings({ maxPrintBed: +e.target.value })} />
+                  <NumberField min={100} step={1} value={settings.maxPrintBed} onChange={(maxPrintBed) => patchSettings({ maxPrintBed })} aria-label="maxPrintBed mm" />
                 </div>
                 <label className="chk">
                   <input type="checkbox" checked={settings.splitPlate} onChange={(e) => patchSettings({ splitPlate: e.target.checked })} />
@@ -358,7 +361,7 @@ export default function App() {
                 <h2>Láser · 2 hojas</h2>
                 <div className="row">
                   <label>Material thickness mm</label>
-                  <input type="number" min={0.5} step={0.5} value={settings.matThk} onChange={(e) => patchSettings({ matThk: +e.target.value })} />
+                  <NumberField min={0.5} step={0.5} value={settings.matThk} onChange={(matThk) => patchSettings({ matThk })} aria-label="Material thickness mm" />
                 </div>
                 <label className="chk">
                   <input type="checkbox" checked={settings.pickOut} onChange={(e) => patchSettings({ pickOut: e.target.checked })} />
@@ -367,7 +370,7 @@ export default function App() {
                 {settings.pickOut && (
                   <div className="row">
                     <label>Hole Ø mm</label>
-                    <input type="number" min={2} step={1} value={settings.pickDia} onChange={(e) => patchSettings({ pickDia: +e.target.value })} />
+                    <NumberField min={2} step={1} value={settings.pickDia} onChange={(pickDia) => patchSettings({ pickDia })} aria-label="Pick-out hole diameter mm" />
                   </div>
                 )}
                 <p className="hint">
@@ -378,7 +381,7 @@ export default function App() {
                 <h2>Plantilla Studio</h2>
                 <div className="row">
                   <label>PNG DPI</label>
-                  <input type="number" min={72} step={50} value={settings.dpi} onChange={(e) => patchSettings({ dpi: +e.target.value })} />
+                  <NumberField min={72} step={50} value={settings.dpi} onChange={(dpi) => patchSettings({ dpi })} aria-label="PNG DPI" />
                 </div>
                 <label className="chk">
                   <input type="checkbox" checked={settings.showNum} onChange={(e) => patchSettings({ showNum: e.target.checked })} />
