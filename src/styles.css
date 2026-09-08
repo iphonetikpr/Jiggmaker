@@ -12,11 +12,30 @@
   --bed: #6B7280;
   --warn: #F5A623;
   --ok: #22C55E;
+  --topbar: rgba(15, 20, 25, 0.92);
+  --preview-bg: #121820;
+  --preview-dot: rgba(232, 238, 244, 0.11);
   --r-sm: 8px;
   --r: 12px;
   --r-lg: 16px;
   --controls-w: 380px;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+
+html[data-theme="light"] {
+  --bg: #F4F6F8;
+  --surface: #FFFFFF;
+  --surface-2: #EEF1F5;
+  --border: #D0D7E0;
+  --text: #1A222C;
+  --muted: #5B6B7C;
+  --accent: #0F9F6E;
+  --accent-2: #3B6FD9;
+  --topbar: rgba(244, 246, 248, 0.92);
+  --preview-bg: #E8EDF2;
+  --preview-dot: rgba(26, 34, 44, 0.08);
+  color-scheme: light;
 }
 
 * {
@@ -53,7 +72,7 @@ select {
   gap: 12px;
   padding: 0 18px;
   border-bottom: 1px solid var(--border);
-  background: rgba(15, 20, 25, 0.92);
+  background: var(--topbar);
   position: sticky;
   top: 0;
   z-index: 20;
@@ -92,6 +111,18 @@ select {
 
 .ghost:hover {
   border-color: var(--accent);
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.theme-toggle svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
 }
 
 .shell {
@@ -204,6 +235,7 @@ select {
 
 .row input[type="number"],
 .row input[type="text"],
+.row input.num,
 .row select {
   width: 92px;
   background: var(--surface-2);
@@ -217,7 +249,8 @@ select {
   flex: 1.4;
 }
 
-.row input[type="number"] {
+.row input[type="number"],
+.row input.num {
   width: 76px;
   text-align: right;
   font-family: var(--mono);
@@ -303,7 +336,7 @@ select {
   left: 8px;
   bottom: 8px;
   border: 1px solid var(--border);
-  background: rgba(15, 20, 25, 0.82);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
   color: var(--text);
   border-radius: 8px;
   padding: 4px 8px;
@@ -565,8 +598,8 @@ select {
   border-radius: 8px;
   overflow: hidden;
   cursor: grab;
-  background-color: #121820;
-  background-image: radial-gradient(rgba(232, 238, 244, 0.11) 1.15px, transparent 1.2px);
+  background-color: var(--preview-bg);
+  background-image: radial-gradient(var(--preview-dot) 1.15px, transparent 1.2px);
   background-size: 19px 19px;
   background-position: center;
 }
