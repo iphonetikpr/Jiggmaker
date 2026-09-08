@@ -40,9 +40,11 @@ export function jigPreviewSample(
 export function jigFaceShade(vn: Rgb, avgZ: number, minZ: number, maxZ: number): number {
   const ndotKey = Math.max(0, vn[0] * KEY[0] + vn[1] * KEY[1] + vn[2] * KEY[2]);
   const ndotFill = Math.max(0, vn[0] * FILL[0] + vn[1] * FILL[1] + vn[2] * FILL[2]);
-  const lit = 0.2 + 0.62 * ndotKey + 0.28 * ndotFill;
+  const lit = 0.18 + 0.64 * ndotKey + 0.3 * ndotFill;
   const span = maxZ - minZ || 1;
-  const ao = 0.5 + 0.5 * ((avgZ - minZ) / span);
+  const height01 = (avgZ - minZ) / span;
+  const floorish = Math.max(0, vn[2]) * (1 - height01);
+  const ao = 0.42 + 0.58 * height01 - 0.2 * floorish;
   return Math.max(0.08, Math.min(1, lit * ao));
 }
 
@@ -148,9 +150,9 @@ export function jigHudCaption(triCount: number, jigW: number, jigH: number, soli
 
 /** Square gizmo in CSS pixels. `sc` is identical on X and Y — never the bed 333×88 mapping. */
 export const VIEWCUBE = {
-  size: 72,
-  margin: 14,
-  sc: 24,
+  size: 84,
+  margin: 12,
+  sc: 22,
 } as const;
 
 export type ViewCubeFaceId = "TOP" | "BTM" | "FRONT" | "BACK" | "RIGHT" | "LEFT";
@@ -181,6 +183,8 @@ export type ViewCubeLayout = {
   scY: number;
   viewportW: number;
   viewportH: number;
+  az: number;
+  ax: number;
   faces: ViewCubeFace[];
 };
 
@@ -210,7 +214,7 @@ export function viewCubeLayout(viewW: number, viewH: number, az: number, ax: num
     const db = b.poly[0][2] + b.poly[1][2] + b.poly[2][2] + b.poly[3][2];
     return da - db;
   });
-  return { cx, cy, sc, scX: sc, scY: sc, viewportW: VIEWCUBE.size, viewportH: VIEWCUBE.size, faces: visible };
+  return { cx, cy, sc, scX: sc, scY: sc, viewportW: VIEWCUBE.size, viewportH: VIEWCUBE.size, az, ax, faces: visible };
 }
 
 function pointInPoly(x: number, y: number, poly: Array<[number, number, number]>): boolean {
@@ -235,6 +239,16 @@ export function hitViewCubeFace(layout: ViewCubeLayout, x: number, y: number): V
 
 export function drawViewCube(ctx: CanvasRenderingContext2D, layout: ViewCubeLayout): void {
   ctx.save();
+  const x = layout.cx - layout.viewportW / 2;
+  const y = layout.cy - layout.viewportH / 2;
+  ctx.beginPath();
+  if (typeof ctx.roundRect === "function") ctx.roundRect(x, y, layout.viewportW, layout.viewportH, 10);
+  else ctx.rect(x, y, layout.viewportW, layout.viewportH);
+  ctx.fillStyle = "rgba(15, 20, 25, 0.55)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(139, 154, 171, 0.45)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
   ctx.lineJoin = "round";
   ctx.lineWidth = 1;
   ctx.font = "bold 8px sans-serif";
@@ -242,11 +256,11 @@ export function drawViewCube(ctx: CanvasRenderingContext2D, layout: ViewCubeLayo
   ctx.textBaseline = "middle";
   for (const face of layout.faces) {
     ctx.beginPath();
-    face.poly.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    face.poly.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
     ctx.closePath();
-    const n = face.n;
-    const tilt = 0.78 + 0.22 * Math.max(0, n[2] * 0.35 + 0.4);
-    ctx.fillStyle = `rgba(${Math.round(214 * tilt)},${Math.round(222 * tilt)},${Math.round(232 * tilt)},0.94)`;
+    const vn = rotateNormal(face.n[0], face.n[1], face.n[2], layout.az, layout.ax);
+    const tilt = 0.62 + 0.38 * Math.max(0, vn[2] * 0.55 + vn[0] * 0.25 + 0.2);
+    ctx.fillStyle = `rgba(${Math.round(220 * tilt)},${Math.round(226 * tilt)},${Math.round(234 * tilt)},0.96)`;
     ctx.fill();
     ctx.strokeStyle = "#5b6b7c";
     ctx.stroke();

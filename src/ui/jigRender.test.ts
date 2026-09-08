@@ -90,13 +90,13 @@ describe("3D jig supersample", () => {
 });
 
 describe("viewcube is cubic", () => {
-  it("uses the same pixel scale on X and Y on a wide Mini canvas", () => {
+  it("uses a square well with scX === scY that does not follow Mini 333×88", () => {
     const wide = viewCubeLayout(900, 400, 0.62, -0.65);
     const tall = viewCubeLayout(400, 900, 0.62, -0.65);
     expect(wide.scX).toBe(wide.scY);
-    expect(wide.scX).toBe(VIEWCUBE.sc);
     expect(wide.viewportW).toBe(wide.viewportH);
     expect(wide.viewportW).toBe(VIEWCUBE.size);
+    expect(wide.viewportW / wide.viewportH).not.toBeCloseTo(333 / 88, 1);
     expect(tall.sc).toBe(wide.sc);
     expect(wide.cx).toBeGreaterThan(800);
     expect(wide.cy).toBeLessThan(80);
