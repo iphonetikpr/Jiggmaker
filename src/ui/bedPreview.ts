@@ -148,6 +148,11 @@ export function silhouetteLoopsOf(piece: PlacedPiece): Loop[] {
   return piece.art.length ? piece.art : piece.loops;
 }
 
+/** Pocket opening (clearance loops) — same pose as `silhouetteLoopsOf`. */
+export function pocketLoopsOf(piece: PlacedPiece): Loop[] {
+  return piece.loops.length ? piece.loops : piece.art;
+}
+
 /** Plantilla SVG extents in bed millimetres (jiggenerator `A()`). CAD Y-up, origin at inner BL. */
 export function bedSvgWorld(
   template: BedTemplate,

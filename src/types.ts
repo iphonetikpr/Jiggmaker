@@ -165,4 +165,10 @@ export interface JigResult {
   splitNeeded: boolean;
   splits: Array<{ x0: number; x1: number; label: string }>;
   warn: string | null;
+  /** Bed mm → plate mm (frame / tight). Same delta used for mesh pockets and laser CUT. */
+  plateOffset: { x: number; y: number };
+  /** Uniform plate scale around the plate centroid (`scaleComp`). */
+  meshXform: { cx: number; cy: number; s: number };
+  /** Unscaled solid height (base + pocket, or through-hole thickness). */
+  solidH: number;
 }

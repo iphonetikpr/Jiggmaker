@@ -2,7 +2,7 @@ import { FRAME_PLATE } from "../constants";
 import type { BedSize, Entity, JobObject, JobSettings, JigResult, Loop, PlacedPiece } from "../types";
 import { bboxOf, rectLoop, roundedRectLoop, translateLoop } from "./geom";
 import { applyMoves, packObjects, shiftPiece } from "./layout";
-import { extrudePlate } from "./mesh";
+import { extrudePlate, plateMeshXform, solidHeight } from "./mesh";
 import { bedFromSettings, plateLabel } from "./filename";
 import { prepareObject } from "./prepare";
 
@@ -171,7 +171,10 @@ export function generateJig(
       : null,
   }));
 
+  const meshXform = plateMeshXform(outer, settings.scaleComp);
   const mesh = extrudePlate(outer, meshPockets, settings.baseThk, settings.pocketDepth, settings.scaleComp);
+  const plateOffset = { x: plateDx, y: plateDy };
+  const solidH = solidHeight(settings.baseThk, settings.pocketDepth);
 
   const maxBed = settings.maxPrintBed || 250;
   const oversized = jigW > maxBed + 1e-6 || jigH > maxBed + 1e-6;
@@ -220,6 +223,9 @@ export function generateJig(
     splitNeeded: oversized,
     splits,
     warn,
+    plateOffset,
+    meshXform,
+    solidH,
   };
 }
 
