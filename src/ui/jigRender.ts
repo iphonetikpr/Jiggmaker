@@ -9,7 +9,7 @@ import {
 export const JIG_MESH_BG: Rgb = [32, 32, 36];
 export const JIG_SAMPLE_IDLE = 2;
 export const JIG_SAMPLE_DRAG = 1.25;
-export const JIG_SAMPLE_MAX = 2200;
+export const JIG_SAMPLE_MAX = 4096;
 
 /** Key from upper-right; fill from the opposite side so walls stay readable. */
 export const JIG_KEY: Rgb = [0.42, 0.28, 0.86];
