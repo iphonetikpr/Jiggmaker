@@ -197,7 +197,9 @@ function drawMesh(
     nx /= len;
     ny /= len;
     nz /= len;
-    const shade = 0.35 + 0.65 * Math.max(0, nx * 0.3 + ny * 0.15 + nz * 0.9);
+    const zAvg = (t[2] + t[5] + t[8]) / 3;
+    const recessed = zAvg < result.solidH * result.meshXform.s - 0.2 ? 0.58 : 1;
+    const shade = (0.35 + 0.65 * Math.max(0, nx * 0.3 + ny * 0.15 + nz * 0.9)) * recessed;
     faces.push({ z: (a[2] + b[2] + c[2]) / 3, pts: [...a, ...b, ...c], shade });
   }
   faces.sort((a, b) => a.z - b.z);
