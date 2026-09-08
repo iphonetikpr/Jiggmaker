@@ -147,3 +147,85 @@ export function fitBedView(
 export function silhouetteLoopsOf(piece: PlacedPiece): Loop[] {
   return piece.art.length ? piece.art : piece.loops;
 }
+
+/** Plantilla SVG extents in bed millimetres (jiggenerator `A()`). CAD Y-up, origin at inner BL. */
+export function bedSvgWorld(
+  template: BedTemplate,
+  bedW: number,
+  bedH: number,
+): { x0: number; x1: number; y0: number; y1: number } {
+  const sx = bedW / template.inner.w;
+  const sy = bedH / template.inner.h;
+  return {
+    x0: -template.inner.x * sx,
+    x1: (template.imageW - template.inner.x) * sx,
+    y0: (template.inner.y + template.inner.h - template.imageH) * sy,
+    y1: (template.inner.y + template.inner.h) * sy,
+  };
+}
+
+export interface TemplateView {
+  sc: number;
+  ox: number;
+  oy: number;
+  imgX: number;
+  imgY: number;
+  imgW: number;
+  imgH: number;
+}
+
+/**
+ * Fit the full plantilla + bed in CAD mm with one scale (jiggenerator `O()`).
+ * Screen: `x' = ox + x*sc`, `y' = oy + (bedH - y)*sc`.
+ */
+export function fitTemplateView(
+  viewW: number,
+  viewH: number,
+  bedW: number,
+  bedH: number,
+  zoom: number,
+  panx: number,
+  pany: number,
+  template: BedTemplate = BED_MINI,
+): TemplateView {
+  const ext = bedSvgWorld(template, bedW, bedH);
+  const minX = Math.min(0, ext.x0);
+  const minY = Math.min(0, ext.y0);
+  const maxX = Math.max(bedW, ext.x1);
+  const maxY = Math.max(bedH, ext.y1);
+  const worldW = maxX - minX;
+  const worldH = maxY - minY;
+  const sc0 = Math.min((viewW - 32) / worldW, (viewH - 32) / worldH);
+  const sc = Math.max(0.02, sc0 * Math.max(0.01, zoom));
+  const ox = (viewW - worldW * sc) / 2 - minX * sc + panx;
+  const oy = (viewH - worldH * sc) / 2 - (bedH - maxY) * sc + pany;
+  return {
+    sc,
+    ox,
+    oy,
+    imgX: ox + ext.x0 * sc,
+    imgY: oy + (bedH - ext.y1) * sc,
+    imgW: (ext.x1 - ext.x0) * sc,
+    imgH: (ext.y1 - ext.y0) * sc,
+  };
+}
+
+export function clientToBedMm(
+  clientX: number,
+  clientY: number,
+  canvasLeft: number,
+  canvasTop: number,
+  view: Pick<TemplateView, "ox" | "oy" | "sc">,
+  bedH: number,
+): [number, number] {
+  return [(clientX - canvasLeft - view.ox) / view.sc, bedH - (clientY - canvasTop - view.oy) / view.sc];
+}
+
+export function bedToScreen(
+  x: number,
+  y: number,
+  view: Pick<TemplateView, "ox" | "oy" | "sc">,
+  bedH: number,
+): [number, number] {
+  return [view.ox + x * view.sc, view.oy + (bedH - y) * view.sc];
+}
