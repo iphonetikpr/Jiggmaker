@@ -176,4 +176,28 @@ describe("STL silhouette on the bed", () => {
     expect(rb.w).toBeGreaterThan(28);
     expect(rb.h).toBeGreaterThan(38);
   });
+
+  it("keeps pocket and art on the same move / one millimetre scale", () => {
+    const obj = newObject(0);
+    obj.mode = "rectangle";
+    obj.rectW = 40;
+    obj.rectH = 20;
+    obj.count = 1;
+    const settings = defaultSettings();
+    const base = generateJig([obj], {}, settings, {});
+    const moved = generateJig([obj], {}, settings, { [base.placed[0].label]: [10, 5] });
+    const pocket = bboxOf(moved.placed[0].loops);
+    const art = bboxOf(silhouetteLoopsOf(moved.placed[0]));
+    const basePocket = bboxOf(base.placed[0].loops);
+    expect(pocket.minX - basePocket.minX).toBeCloseTo(10, 5);
+    expect(pocket.minY - basePocket.minY).toBeCloseTo(5, 5);
+    expect(art.minX).toBeGreaterThan(pocket.minX - 1e-6);
+    expect(art.maxX).toBeLessThan(pocket.maxX + 1e-6);
+    const tv = fitTemplateView(900, 400, moved.template.bed.w, moved.template.bed.h, 1, 0, 0);
+    const [sx0] = bedToScreen(pocket.minX, pocket.minY, tv, moved.template.bed.h);
+    const [sx1] = bedToScreen(pocket.maxX, pocket.minY, tv, moved.template.bed.h);
+    const [syArt0] = bedToScreen(art.minX, art.minY, tv, moved.template.bed.h);
+    expect((sx1 - sx0) / pocket.w).toBeCloseTo(tv.sc, 6);
+    expect(syArt0).toBeGreaterThan(0);
+  });
 });

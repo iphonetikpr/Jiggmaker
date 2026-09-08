@@ -1,6 +1,6 @@
 import { OBJECT_COLORS } from "../constants";
 import type { HolesMode, JobObject, PreparedObject, StlMesh } from "../types";
-import { inflatedRect, originLoops } from "./geom";
+import { inflatedRect, originLoops, translateLoop } from "./geom";
 import { projectStl, silhouetteLoops } from "./project";
 import { parseSTL } from "./stl";
 
@@ -52,9 +52,9 @@ export function prepareObject(
     const artSrc =
       obj.mode === "rectangle" ? inflatedRect(proj.bbox, 0) : silhouetteLoops(proj, 0);
     const art = originLoops(artSrc.length ? artSrc : centered.loops);
-    const artLoops = art.loops.map((l) =>
-      l.map(([x, y]) => [x - (art.ox - centered.ox), y - (art.oy - centered.oy)] as [number, number]),
-    );
+    // originLoops pinned both bboxes at (0,0). Shift art by the original origin
+    // delta so it sits inside the pocket (clearance inset), not opposite it.
+    const artLoops = art.loops.map((l) => translateLoop(l, art.ox - centered.ox, art.oy - centered.oy));
 
     return {
       id: obj.id,
@@ -78,6 +78,7 @@ export function prepareObject(
   const loops = inflatedRect([0, 0, w, h], clearance);
   const centered = originLoops(loops);
   const art = originLoops(inflatedRect([0, 0, w, h], 0));
+  const artLoops = art.loops.map((l) => translateLoop(l, art.ox - centered.ox, art.oy - centered.oy));
 
   return {
     id: obj.id,
@@ -87,7 +88,7 @@ export function prepareObject(
     color,
     loops: centered.loops,
     holes: [],
-    artLoops: art.loops,
+    artLoops,
     artHoles: [],
     holesMode: obj.holes as HolesMode,
     w: centered.w,

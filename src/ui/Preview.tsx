@@ -3,6 +3,8 @@ import { LAYER_SVG } from "../constants";
 import type { Entity, JigResult, PreviewMode } from "../types";
 import bedMiniSvg from "../assets/bed-mini.svg?raw";
 import bedStdSvg from "../assets/bed-std.svg?raw";
+import { piecePose, toMeshPoint } from "../cad/pose";
+import { orbitProject } from "./partView";
 import {
   type BedView,
   BED_STD,
@@ -11,6 +13,7 @@ import {
   fitTemplateView,
   plantillaMarkup,
   plateViewSize,
+  pocketLoopsOf,
   silhouetteLoopsOf,
   templateForResult,
 } from "./bedPreview";
@@ -67,6 +70,20 @@ function drawEntities(
   }
 }
 
+function strokeLoop(
+  ctx: CanvasRenderingContext2D,
+  loop: [number, number][],
+  X: (x: number) => number,
+  Y: (y: number) => number,
+) {
+  if (loop.length < 2) return false;
+  ctx.beginPath();
+  ctx.moveTo(X(loop[0][0]), Y(loop[0][1]));
+  for (let i = 1; i < loop.length; i++) ctx.lineTo(X(loop[i][0]), Y(loop[i][1]));
+  ctx.closePath();
+  return true;
+}
+
 function drawSilhouettes(
   ctx: CanvasRenderingContext2D,
   result: JigResult,
@@ -79,24 +96,27 @@ function drawSilhouettes(
   const X = (x: number) => ox + x * sc;
   const Y = (y: number) => oy + (bedH - y) * sc;
   for (const p of result.placed) {
-    for (const loop of silhouetteLoopsOf(p)) {
-      if (loop.length < 2) continue;
-      ctx.beginPath();
-      ctx.moveTo(X(loop[0][0]), Y(loop[0][1]));
-      for (let i = 1; i < loop.length; i++) ctx.lineTo(X(loop[i][0]), Y(loop[i][1]));
-      ctx.closePath();
-      ctx.fillStyle = rgba(p.color, 0.28);
+    const pose = piecePose(p);
+    for (const loop of pocketLoopsOf(p)) {
+      if (!strokeLoop(ctx, loop, X, Y)) continue;
+      ctx.fillStyle = rgba(p.color, 0.22);
       ctx.fill();
       ctx.strokeStyle = LAYER_SVG.CUT;
       ctx.lineWidth = Math.max(1.75, 0.4 * sc);
       ctx.stroke();
     }
-    for (const loop of p.artHoles.length ? p.artHoles : p.holes) {
-      if (loop.length < 2) continue;
-      ctx.beginPath();
-      ctx.moveTo(X(loop[0][0]), Y(loop[0][1]));
-      for (let i = 1; i < loop.length; i++) ctx.lineTo(X(loop[i][0]), Y(loop[i][1]));
-      ctx.closePath();
+    if (pose.art !== pose.pocket) {
+      for (const loop of silhouetteLoopsOf(p)) {
+        if (!strokeLoop(ctx, loop, X, Y)) continue;
+        ctx.fillStyle = rgba(p.color, 0.16);
+        ctx.fill();
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = Math.max(1.1, 0.22 * sc);
+        ctx.stroke();
+      }
+    }
+    for (const loop of pose.holes) {
+      if (!strokeLoop(ctx, loop, X, Y)) continue;
       ctx.strokeStyle = LAYER_SVG.SCORE;
       ctx.lineWidth = Math.max(1.25, 0.25 * sc);
       ctx.stroke();
@@ -124,7 +144,7 @@ function hex(c: string): [number, number, number] {
   return [parseInt(n.slice(0, 2), 16), parseInt(n.slice(2, 4), 16), parseInt(n.slice(4, 6), 16)];
 }
 
-/** Orbit the plate + pockets solid (jiggenerator 3D jig tab). */
+/** Orbit the plate + pockets solid (jiggenerator 3D jig tab). One matrix for mesh + rims. */
 function drawMesh(
   ctx: CanvasRenderingContext2D,
   result: JigResult,
@@ -147,11 +167,7 @@ function drawMesh(
   }
   const cx = result.jig.w / 2,
     cy = result.jig.h / 2,
-    cz = 4;
-  const cs = Math.cos(az),
-    sn = Math.sin(az);
-  const ca = Math.cos(ax),
-    sa = Math.sin(ax);
+    cz = result.solidH / 2;
   let maxR = 1;
   for (const t of tris) {
     for (let i = 0; i < 9; i += 3) {
@@ -159,19 +175,9 @@ function drawMesh(
     }
   }
   const sc = (0.42 * Math.min(W, H) * zoom) / maxR;
-  const project = (x: number, y: number, z: number): [number, number, number] => {
-    const dx = x - cx,
-      dy = y - cy,
-      dz = z - cz;
-    const rx = dx * cs - dy * sn;
-    const ry = dx * sn + dy * cs;
-    const rz = ry * sa + dz * ca;
-    const py = ry * ca - dz * sa;
-    return [W / 2 + rx * sc, H / 2 - py * sc, rz];
-  };
+  const project = (x: number, y: number, z: number) => orbitProject(x, y, z, cx, cy, cz, az, ax, sc, W, H);
   const faces: Array<{ z: number; pts: number[]; shade: number }> = [];
-  const step = Math.max(1, Math.floor(tris.length / 8000));
-  for (let i = 0; i < tris.length; i += step) {
+  for (let i = 0; i < tris.length; i++) {
     const t = tris[i];
     const a = project(t[0], t[1], t[2]);
     const b = project(t[3], t[4], t[5]);
@@ -191,7 +197,9 @@ function drawMesh(
     nx /= len;
     ny /= len;
     nz /= len;
-    const shade = 0.35 + 0.65 * Math.max(0, nx * 0.3 + ny * 0.15 + nz * 0.9);
+    const zAvg = (t[2] + t[5] + t[8]) / 3;
+    const recessed = zAvg < result.solidH * result.meshXform.s - 0.2 ? 0.58 : 1;
+    const shade = (0.35 + 0.65 * Math.max(0, nx * 0.3 + ny * 0.15 + nz * 0.9)) * recessed;
     faces.push({ z: (a[2] + b[2] + c[2]) / 3, pts: [...a, ...b, ...c], shade });
   }
   faces.sort((a, b) => a.z - b.z);
@@ -204,6 +212,34 @@ function drawMesh(
     ctx.closePath();
     ctx.fillStyle = `rgb(${(r * f.shade) | 0},${(g * f.shade) | 0},${(b * f.shade) | 0})`;
     ctx.fill();
+  }
+  drawPocketRims(ctx, result, project);
+}
+
+function drawPocketRims(
+  ctx: CanvasRenderingContext2D,
+  result: JigResult,
+  project: (x: number, y: number, z: number) => [number, number, number],
+) {
+  const topZ = result.solidH;
+  const offset = result.plateOffset;
+  const xf = result.meshXform;
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 1.6;
+  ctx.strokeStyle = "rgba(255,255,255,0.88)";
+  for (const p of result.placed) {
+    for (const loop of pocketLoopsOf(p)) {
+      if (loop.length < 2) continue;
+      ctx.beginPath();
+      for (let i = 0; i < loop.length; i++) {
+        const [mx, my, mz] = toMeshPoint(loop[i][0], loop[i][1], topZ, offset, xf);
+        const [sx, sy] = project(mx, my, mz);
+        if (i === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
   }
 }
 

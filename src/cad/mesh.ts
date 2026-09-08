@@ -83,6 +83,22 @@ export interface PocketSpec {
   pick?: { cx: number; cy: number; r: number } | null;
 }
 
+export function solidHeight(baseThk: number, pocketDepth: number): number {
+  return baseThk <= 0 ? Math.max(0.4, pocketDepth) : baseThk + pocketDepth;
+}
+
+export function plateMeshXform(outer: Loop, scaleComp: boolean): { cx: number; cy: number; s: number } {
+  let cx = 0,
+    cy = 0,
+    n = 0;
+  for (const [x, y] of outer) {
+    cx += x;
+    cy += y;
+    n++;
+  }
+  return { cx: cx / (n || 1), cy: cy / (n || 1), s: scaleComp ? SCALE_COMP : 1 };
+}
+
 export function extrudePlate(
   outer: Loop,
   pockets: PocketSpec[],
@@ -92,58 +108,50 @@ export function extrudePlate(
 ): Tri[] {
   const through = baseThk <= 0;
   const extra = through ? 0 : POCKET_DEPTH_EXTRA;
-  const totalH = through ? Math.max(0.4, pocketDepth) : baseThk + pocketDepth;
+  const topZ = solidHeight(baseThk, pocketDepth);
   const floorZ = through ? 0 : Math.max(0, baseThk - extra);
-  const topZ = totalH;
 
   const inners: Loop[] = [];
+  const pickHoles: Loop[] = [];
   for (const p of pockets) {
-    if (p.loops[0]) inners.push(p.loops[0]);
-    if (p.pick && p.pick.r > 0.2) {
-      /* pick-out is a through hole in the floor, handled separately */
+    for (const loop of p.loops) {
+      if (loop.length >= 3) inners.push(loop);
     }
+    if (p.pick && p.pick.r > 0.2) pickHoles.push(circleLoop(p.pick.cx, p.pick.cy, p.pick.r, 20));
   }
 
   const out: Tri[] = [];
-  cap(out, outer, through ? inners : [], topZ, true);
-  cap(out, outer, through ? inners : [], 0, false);
+  // Always cut pocket openings in the top — a solid lid z-fights and hides
+  // pockets when the 3D preview orbits (painter's algorithm + backfaces).
+  cap(out, outer, inners, topZ, true);
+  cap(out, outer, through ? inners : pickHoles, 0, false);
   ringWalls(out, outer, 0, topZ, true);
 
   for (const p of pockets) {
-    const pocket = p.loops[0];
-    if (!pocket || pocket.length < 3) continue;
-    if (through) {
-      ringWalls(out, pocket, 0, topZ, false);
-    } else {
-      cap(out, pocket, [], topZ, false);
-      cap(out, pocket, p.pick && p.pick.r > 0.2 ? [] : [], floorZ, true);
-      ringWalls(out, pocket, floorZ, topZ, false);
-      if (p.pick && p.pick.r > 0.2) {
-        const hole = circleLoop(p.pick.cx, p.pick.cy, p.pick.r, 20);
-        cap(out, hole, [], floorZ, false);
-        cap(out, hole, [], 0, true);
+    const picks = p.pick && p.pick.r > 0.2 ? [circleLoop(p.pick.cx, p.pick.cy, p.pick.r, 20)] : [];
+    for (const pocket of p.loops) {
+      if (!pocket || pocket.length < 3) continue;
+      if (through) {
+        ringWalls(out, pocket, 0, topZ, false);
+      } else {
+        cap(out, pocket, picks, floorZ, true);
+        ringWalls(out, pocket, floorZ, topZ, false);
+      }
+    }
+    if (!through) {
+      for (const hole of picks) {
         ringWalls(out, hole, 0, floorZ, false);
       }
     }
   }
 
-  if (scaleComp) {
-    const s = SCALE_COMP;
-    let cx = 0,
-      cy = 0,
-      n = 0;
-    for (const [x, y] of outer) {
-      cx += x;
-      cy += y;
-      n++;
-    }
-    cx /= n || 1;
-    cy /= n || 1;
+  const xf = plateMeshXform(outer, scaleComp);
+  if (xf.s !== 1) {
     for (const t of out) {
       for (let i = 0; i < 9; i += 3) {
-        t[i] = cx + (t[i] - cx) * s;
-        t[i + 1] = cy + (t[i + 1] - cy) * s;
-        t[i + 2] *= s;
+        t[i] = xf.cx + (t[i] - xf.cx) * xf.s;
+        t[i + 1] = xf.cy + (t[i + 1] - xf.cy) * xf.s;
+        t[i + 2] *= xf.s;
       }
     }
   }
