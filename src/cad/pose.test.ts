@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULTS, POCKET_DEPTH_EXTRA } from "../constants";
-import { orbitProject } from "../ui/partView";
+import { jigOrbitCamera, projectJigOrbit } from "../ui/partView";
 import { pocketLoopsOf, silhouetteLoopsOf } from "../ui/bedPreview";
 import { bboxOf, pointInPoly } from "./geom";
 import { generateJig } from "./generate";
@@ -143,14 +143,13 @@ describe("piece + pocket share one pose", () => {
   it("projects pocket rims with the mesh orbit matrix at every angle", () => {
     const r = rectJob();
     const loop = pocketLoopsOf(r.placed[0])[0];
-    const cx = r.jig.w / 2,
-      cy = r.jig.h / 2,
-      cz = r.solidH / 2;
+    const cam = jigOrbitCamera(r.jig.w, r.jig.h, r.solidH, r.mesh, 640, 400, 1);
+    expect(cam.scX).toBe(cam.scY);
     for (const az of [0, 0.62, 1.4, 2.6, 3.5]) {
       for (const ax of [-0.15, -0.65, -1.5, -2.4]) {
         for (const [x, y] of loop) {
           const [mx, my, mz] = toMeshPoint(x, y, r.solidH, r.plateOffset, r.meshXform);
-          const [sx, sy, sz] = orbitProject(mx, my, mz, cx, cy, cz, az, ax, 2.5, 640, 400);
+          const [sx, sy, sz] = projectJigOrbit(mx, my, mz, cam, az, ax, 640, 400);
           expect(Number.isFinite(sx)).toBe(true);
           expect(Number.isFinite(sy)).toBe(true);
           expect(Number.isFinite(sz)).toBe(true);

@@ -4,7 +4,7 @@ import type { Entity, JigResult, PreviewMode } from "../types";
 import bedMiniSvg from "../assets/bed-mini.svg?raw";
 import bedStdSvg from "../assets/bed-std.svg?raw";
 import { piecePose, toMeshPoint } from "../cad/pose";
-import { orbitProject } from "./partView";
+import { jigOrbitCamera, projectJigOrbit } from "./partView";
 import {
   type BedView,
   BED_STD,
@@ -144,7 +144,7 @@ function hex(c: string): [number, number, number] {
   return [parseInt(n.slice(0, 2), 16), parseInt(n.slice(2, 4), 16), parseInt(n.slice(4, 6), 16)];
 }
 
-/** Orbit the plate + pockets solid (jiggenerator 3D jig tab). One matrix for mesh + rims. */
+/** Orbit the plate + pockets solid. Uniform scale (scX === scY); not the bed 333×88 mapping. */
 function drawMesh(
   ctx: CanvasRenderingContext2D,
   result: JigResult,
@@ -165,17 +165,8 @@ function drawMesh(
     ctx.fillText("Añade un objeto para previsualizar el jig", W / 2, H / 2);
     return;
   }
-  const cx = result.jig.w / 2,
-    cy = result.jig.h / 2,
-    cz = result.solidH / 2;
-  let maxR = 1;
-  for (const t of tris) {
-    for (let i = 0; i < 9; i += 3) {
-      maxR = Math.max(maxR, Math.hypot(t[i] - cx, t[i + 1] - cy, t[i + 2] - cz));
-    }
-  }
-  const sc = (0.42 * Math.min(W, H) * zoom) / maxR;
-  const project = (x: number, y: number, z: number) => orbitProject(x, y, z, cx, cy, cz, az, ax, sc, W, H);
+  const cam = jigOrbitCamera(result.jig.w, result.jig.h, result.solidH, tris, W, H, zoom);
+  const project = (x: number, y: number, z: number) => projectJigOrbit(x, y, z, cam, az, ax, W, H);
   const faces: Array<{ z: number; pts: number[]; shade: number }> = [];
   for (let i = 0; i < tris.length; i++) {
     const t = tris[i];
@@ -302,9 +293,10 @@ export function Preview({
     const parent = canvas.parentElement!;
 
     const measure = () => {
+      const parentBox = parent.getBoundingClientRect();
       const box = canvas.getBoundingClientRect();
-      const W = Math.max(1, box.width || parent.clientWidth);
-      const H = Math.max(1, box.height || parent.clientHeight);
+      const W = Math.max(1, parentBox.width || parent.clientWidth || box.width);
+      const H = Math.max(1, parentBox.height || parent.clientHeight || box.height);
       return { box, W, H };
     };
 
@@ -327,8 +319,8 @@ export function Preview({
       const { W, H } = measure();
       canvas.width = Math.max(1, Math.round(W * dpr));
       canvas.height = Math.max(1, Math.round(H * dpr));
-      canvas.style.width = W + "px";
-      canvas.style.height = H + "px";
+      canvas.style.width = "";
+      canvas.style.height = "";
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
