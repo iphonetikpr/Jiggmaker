@@ -125,6 +125,22 @@ describe("STL silhouette", () => {
     expect(r.totalUnits).toBe(1);
   });
 
+  it("applies job moves to template layout and Reset-style empty moves", () => {
+    const settings = defaultSettings();
+    const obj = newObject(0);
+    obj.mode = "rectangle";
+    obj.rectW = 40;
+    obj.rectH = 20;
+    obj.count = 1;
+    const base = generateJig([obj], {}, settings, {});
+    const label = base.placed[0].label;
+    const moved = generateJig([obj], {}, settings, { [label]: [12, -4] });
+    expect(moved.placed[0].cx).toBeCloseTo(base.placed[0].cx + 12, 5);
+    expect(moved.placed[0].cy).toBeCloseTo(base.placed[0].cy - 4, 5);
+    const cleared = generateJig([obj], {}, settings, {});
+    expect(cleared.placed[0].cx).toBeCloseTo(base.placed[0].cx, 5);
+  });
+
   it("L-shaped STL keeps a non-rectangular art outline", () => {
     const buf = makeLStl(8);
     const settings = defaultSettings();

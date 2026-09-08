@@ -505,7 +505,9 @@ export default function App() {
               </div>
               <div className="preview-ft">
                 <p className="hint">
-                  Scroll to zoom, drag empty space to pan. In <b>Template</b> view, drag a piece to reposition it.
+                  {preview === "jig3d"
+                    ? "Drag to orbit the jig solid · scroll to zoom."
+                    : "Scroll to zoom, drag empty space to pan. In Template, drag a piece silhouette to reposition it."}
                 </p>
                 <button className="ghost" type="button" onClick={() => setViewReset((n) => n + 1)}>
                   Reset view

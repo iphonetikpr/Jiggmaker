@@ -13,9 +13,13 @@ import {
   BED_STD,
   BED_TEMPLATE,
   bedImageDest,
+  bedSvgWorld,
   bedTemplateUrl,
   bedToPlate,
+  bedToScreen,
+  clientToBedMm,
   fitBedView,
+  fitTemplateView,
   plantillaHasBranding,
   plantillaMarkup,
   plateToBed,
@@ -109,6 +113,21 @@ describe("plate mapping", () => {
     expect(innerTop).toBeCloseTo(oy, 8);
     expect(innerRight).toBeCloseTo(ox + plateW * sc, 8);
     expect(innerBottom).toBeCloseTo(oy + plateH * sc, 8);
+  });
+
+  it("fits the plantilla with one CAD millimetre scale (jiggenerator O)", () => {
+    const v = fitTemplateView(1000, 400, 333, 88, 1, 0, 0, BED_MINI);
+    const ext = bedSvgWorld(BED_MINI, 333, 88);
+    expect(v.imgX).toBeCloseTo(v.ox + ext.x0 * v.sc, 6);
+    expect(v.imgY).toBeCloseTo(v.oy + (88 - ext.y1) * v.sc, 6);
+    expect(v.imgW).toBeCloseTo((ext.x1 - ext.x0) * v.sc, 6);
+    const [sx, sy] = bedToScreen(0, 0, v, 88);
+    const back = clientToBedMm(sx, sy, 0, 0, v, 88);
+    expect(back[0]).toBeCloseTo(0, 8);
+    expect(back[1]).toBeCloseTo(0, 8);
+    const innerRight = bedToScreen(333, 88, v, 88);
+    expect(innerRight[0]).toBeCloseTo(v.ox + 333 * v.sc, 6);
+    expect(innerRight[1]).toBeCloseTo(v.oy, 6);
   });
 
   it("fits the full plantilla (QR / eufyMake rail included) then maps the inner rect", () => {
