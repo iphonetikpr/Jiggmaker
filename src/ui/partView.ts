@@ -1,5 +1,5 @@
 import { orientPoint } from "../cad/project";
-import type { StlMesh, UpAxis } from "../types";
+import type { StlMesh, Tri, UpAxis } from "../types";
 
 export type Rgb = [number, number, number];
 
@@ -8,6 +8,50 @@ export const PART_VIEW = { w: 260, h: 220 } as const;
 /** Uniform (non-stretching) fit: one scale from the shorter canvas side. */
 export function partViewScale(viewW: number, viewH: number, radius: number, zoom: number): number {
   return (0.46 * Math.min(viewW, viewH) * Math.max(0.01, zoom)) / (radius || 1);
+}
+
+/**
+ * 3D jig tab: one scale from the shorter canvas side and the mesh radius.
+ * Never uses bed W×H (333×88) or plantilla scX/scY — that mapping is 2D-only.
+ */
+export function jigViewScale(viewW: number, viewH: number, radius: number, zoom: number): number {
+  return (0.42 * Math.min(viewW, viewH) * Math.max(0.01, zoom)) / (radius || 1);
+}
+
+export type JigOrbitCamera = {
+  cx: number;
+  cy: number;
+  cz: number;
+  sc: number;
+  scX: number;
+  scY: number;
+};
+
+export function jigMeshRadius(tris: Tri[], cx: number, cy: number, cz: number): number {
+  let maxR = 1;
+  for (const t of tris) {
+    for (let i = 0; i < 9; i += 3) {
+      maxR = Math.max(maxR, Math.hypot(t[i] - cx, t[i + 1] - cy, t[i + 2] - cz));
+    }
+  }
+  return maxR;
+}
+
+/** Pure-rotation camera for the plate + pockets. `scX === scY` on every canvas size. */
+export function jigOrbitCamera(
+  jigW: number,
+  jigH: number,
+  solidH: number,
+  tris: Tri[],
+  viewW: number,
+  viewH: number,
+  zoom: number,
+): JigOrbitCamera {
+  const cx = jigW / 2;
+  const cy = jigH / 2;
+  const cz = solidH / 2;
+  const sc = jigViewScale(viewW, viewH, jigMeshRadius(tris, cx, cy, cz), zoom);
+  return { cx, cy, cz, sc, scX: sc, scY: sc };
 }
 
 /** Orthographic orbit. Same scale on X and Y so the mesh is never squashed. */
@@ -36,6 +80,20 @@ export function orbitProject(
   const depth = ry * sa + dz * ca;
   const py = ry * ca - dz * sa;
   return [viewW / 2 + rx * sc, viewH / 2 - py * sc, depth];
+}
+
+/** Project a mesh/rim point with the 3D jig camera (uniform `sc`, never bed scX/scY). */
+export function projectJigOrbit(
+  x: number,
+  y: number,
+  z: number,
+  cam: Pick<JigOrbitCamera, "cx" | "cy" | "cz" | "sc">,
+  az: number,
+  ax: number,
+  viewW: number,
+  viewH: number,
+): [number, number, number] {
+  return orbitProject(x, y, z, cam.cx, cam.cy, cam.cz, az, ax, cam.sc, viewW, viewH);
 }
 
 function rotateNormal(nx: number, ny: number, nz: number, az: number, ax: number): [number, number, number] {

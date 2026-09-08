@@ -116,6 +116,9 @@ describe("plate mapping", () => {
   });
 
   it("fits the plantilla with one CAD millimetre scale (jiggenerator O)", () => {
+    const plantillaSx = 333 / BED_MINI.inner.w;
+    const plantillaSy = 88 / BED_MINI.inner.h;
+    expect(plantillaSx).not.toBeCloseTo(plantillaSy, 2);
     const v = fitTemplateView(1000, 400, 333, 88, 1, 0, 0, BED_MINI);
     const ext = bedSvgWorld(BED_MINI, 333, 88);
     expect(v.imgX).toBeCloseTo(v.ox + ext.x0 * v.sc, 6);
