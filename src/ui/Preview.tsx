@@ -3,8 +3,20 @@ import { LAYER_SVG } from "../constants";
 import type { Entity, JigResult, PreviewMode } from "../types";
 import bedMiniSvg from "../assets/bed-mini.svg?raw";
 import bedStdSvg from "../assets/bed-std.svg?raw";
-import { piecePose, toMeshPoint } from "../cad/pose";
-import { jigOrbitCamera, projectJigOrbit } from "./partView";
+import { piecePose } from "../cad/pose";
+import { jigOrbitCamera } from "./partView";
+import {
+  JIG_MESH_BG,
+  drawViewCube,
+  hexToRgb,
+  hitViewCubeFace,
+  jigHudCaption,
+  jigPreviewSample,
+  renderJigMesh,
+  shortestAzDelta,
+  viewCubeLayout,
+  type ViewCubeLayout,
+} from "./jigRender";
 import {
   type BedView,
   BED_STD,
@@ -144,9 +156,23 @@ function hex(c: string): [number, number, number] {
   return [parseInt(n.slice(0, 2), 16), parseInt(n.slice(2, 4), 16), parseInt(n.slice(4, 6), 16)];
 }
 
+function blitFrame(ctx: CanvasRenderingContext2D, off: HTMLCanvasElement, data: Uint8ClampedArray, srcW: number, srcH: number, destW: number, destH: number) {
+  off.width = srcW;
+  off.height = srcH;
+  const octx = off.getContext("2d");
+  if (!octx) return;
+  const img = octx.createImageData(srcW, srcH);
+  img.data.set(data);
+  octx.putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  if ("imageSmoothingQuality" in ctx) ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(off, 0, 0, destW, destH);
+}
+
 /** Orbit the plate + pockets solid. Uniform scale (scX === scY); not the bed 333×88 mapping. */
 function drawMesh(
   ctx: CanvasRenderingContext2D,
+  off: HTMLCanvasElement,
   result: JigResult,
   W: number,
   H: number,
@@ -154,84 +180,31 @@ function drawMesh(
   ax: number,
   zoom: number,
   color: string,
-) {
-  const tris = result.mesh;
+  dpr: number,
+  dragging: boolean,
+): ViewCubeLayout {
   ctx.fillStyle = "#202024";
   ctx.fillRect(0, 0, W, H);
+  const tris = result.mesh;
   if (!tris.length) {
     ctx.fillStyle = "#8a8a92";
     ctx.font = "13px sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("Añade un objeto para previsualizar el jig", W / 2, H / 2);
-    return;
+    return viewCubeLayout(W, H, az, ax);
   }
-  const cam = jigOrbitCamera(result.jig.w, result.jig.h, result.solidH, tris, W, H, zoom);
-  const project = (x: number, y: number, z: number) => projectJigOrbit(x, y, z, cam, az, ax, W, H);
-  const faces: Array<{ z: number; pts: number[]; shade: number }> = [];
-  for (let i = 0; i < tris.length; i++) {
-    const t = tris[i];
-    const a = project(t[0], t[1], t[2]);
-    const b = project(t[3], t[4], t[5]);
-    const c = project(t[6], t[7], t[8]);
-    const area = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]);
-    if (area >= 0) continue;
-    const ux = t[3] - t[0],
-      uy = t[4] - t[1],
-      uz = t[5] - t[2];
-    const vx = t[6] - t[0],
-      vy = t[7] - t[1],
-      vz = t[8] - t[2];
-    let nx = uy * vz - uz * vy,
-      ny = uz * vx - ux * vz,
-      nz = ux * vy - uy * vx;
-    const len = Math.hypot(nx, ny, nz) || 1;
-    nx /= len;
-    ny /= len;
-    nz /= len;
-    const zAvg = (t[2] + t[5] + t[8]) / 3;
-    const recessed = zAvg < result.solidH * result.meshXform.s - 0.2 ? 0.58 : 1;
-    const shade = (0.35 + 0.65 * Math.max(0, nx * 0.3 + ny * 0.15 + nz * 0.9)) * recessed;
-    faces.push({ z: (a[2] + b[2] + c[2]) / 3, pts: [...a, ...b, ...c], shade });
-  }
-  faces.sort((a, b) => a.z - b.z);
-  const [r, g, b] = hex(color);
-  for (const f of faces) {
-    ctx.beginPath();
-    ctx.moveTo(f.pts[0], f.pts[1]);
-    ctx.lineTo(f.pts[3], f.pts[4]);
-    ctx.lineTo(f.pts[6], f.pts[7]);
-    ctx.closePath();
-    ctx.fillStyle = `rgb(${(r * f.shade) | 0},${(g * f.shade) | 0},${(b * f.shade) | 0})`;
-    ctx.fill();
-  }
-  drawPocketRims(ctx, result, project);
-}
-
-function drawPocketRims(
-  ctx: CanvasRenderingContext2D,
-  result: JigResult,
-  project: (x: number, y: number, z: number) => [number, number, number],
-) {
-  const topZ = result.solidH;
-  const offset = result.plateOffset;
-  const xf = result.meshXform;
-  ctx.lineJoin = "round";
-  ctx.lineWidth = 1.6;
-  ctx.strokeStyle = "rgba(255,255,255,0.88)";
-  for (const p of result.placed) {
-    for (const loop of pocketLoopsOf(p)) {
-      if (loop.length < 2) continue;
-      ctx.beginPath();
-      for (let i = 0; i < loop.length; i++) {
-        const [mx, my, mz] = toMeshPoint(loop[i][0], loop[i][1], topZ, offset, xf);
-        const [sx, sy] = project(mx, my, mz);
-        if (i === 0) ctx.moveTo(sx, sy);
-        else ctx.lineTo(sx, sy);
-      }
-      ctx.closePath();
-      ctx.stroke();
-    }
-  }
+  const sample = jigPreviewSample(W, H, dpr, dragging);
+  const cam = jigOrbitCamera(result.jig.w, result.jig.h, result.solidH, tris, sample.w, sample.h, zoom);
+  const frame = renderJigMesh(tris, cam, az, ax, sample.w, sample.h, hexToRgb(color), JIG_MESH_BG);
+  blitFrame(ctx, off, frame.data, frame.w, frame.h, W, H);
+  const cube = viewCubeLayout(W, H, az, ax);
+  drawViewCube(ctx, cube);
+  ctx.fillStyle = "#b9b9c2";
+  ctx.font = "11px sans-serif";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(jigHudCaption(tris.length, result.jig.w, result.jig.h, result.solidH), 12, H - 12);
+  return cube;
 }
 
 const DEFAULT_2D = { zoom: 1, panx: 0, pany: 0 };
@@ -255,8 +228,11 @@ export function Preview({
   const ref = useRef<HTMLCanvasElement>(null);
   const miniImg = useRef<HTMLImageElement | null>(null);
   const stdImg = useRef<HTMLImageElement | null>(null);
+  const offscreen = useRef<HTMLCanvasElement | null>(null);
   const view2 = useRef({ ...DEFAULT_2D });
   const view3 = useRef({ ...DEFAULT_3D });
+  const cube = useRef<ViewCubeLayout | null>(null);
+  const snap = useRef<number | null>(null);
   const drag = useRef<{ kind: "pan" | "orbit" | "piece" | null; x: number; y: number; label?: string }>({
     kind: null,
     x: 0,
@@ -332,9 +308,23 @@ export function Preview({
           ctx.fillStyle = "#8a8a92";
           ctx.font = "13px sans-serif";
           ctx.fillText("Añade un objeto para previsualizar el jig", 24, 36);
+          cube.current = null;
           return;
         }
-        drawMesh(ctx, result, W, H, view3.current.az, view3.current.ax, view3.current.zoom, jigColor);
+        if (!offscreen.current) offscreen.current = document.createElement("canvas");
+        cube.current = drawMesh(
+          ctx,
+          offscreen.current,
+          result,
+          W,
+          H,
+          view3.current.az,
+          view3.current.ax,
+          view3.current.zoom,
+          jigColor,
+          dpr,
+          drag.current.kind === "orbit",
+        );
         return;
       }
       const tmpl = templateForResult(result);
@@ -384,9 +374,25 @@ export function Preview({
       return hitPieceLabel(result.placed, world.xy[0], world.xy[1]);
     };
 
+    const localXy = (ev: PointerEvent) => {
+      const { box } = measure();
+      return [ev.clientX - box.left, ev.clientY - box.top] as const;
+    };
+
     const setCursor = (ev?: PointerEvent) => {
       if (latest.current.mode === "jig3d") {
-        canvas.style.cursor = drag.current.kind ? "grabbing" : "grab";
+        if (drag.current.kind) {
+          canvas.style.cursor = "grabbing";
+          return;
+        }
+        if (ev && cube.current) {
+          const [x, y] = localXy(ev);
+          if (hitViewCubeFace(cube.current, x, y)) {
+            canvas.style.cursor = "pointer";
+            return;
+          }
+        }
+        canvas.style.cursor = "grab";
         return;
       }
       if (drag.current.kind) {
@@ -400,13 +406,38 @@ export function Preview({
       canvas.style.cursor = view2.current.zoom > 1.01 ? "grab" : "default";
     };
 
+    const snapTo = (ax: number, az: number) => {
+      if (snap.current != null) cancelAnimationFrame(snap.current);
+      const fromAx = view3.current.ax;
+      const fromAz = view3.current.az;
+      const dAz = shortestAzDelta(fromAz, az);
+      const t0 = performance.now();
+      const step = (now: number) => {
+        const t = Math.min(1, (now - t0) / 280);
+        const s = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        view3.current.ax = fromAx + (ax - fromAx) * s;
+        view3.current.az = fromAz + dAz * s;
+        paint();
+        if (t < 1) snap.current = requestAnimationFrame(step);
+        else snap.current = null;
+      };
+      snap.current = requestAnimationFrame(step);
+    };
+
     const down = (ev: PointerEvent) => {
-      canvas.setPointerCapture(ev.pointerId);
       if (latest.current.mode === "jig3d") {
+        const [x, y] = localXy(ev);
+        const face = cube.current ? hitViewCubeFace(cube.current, x, y) : null;
+        if (face) {
+          snapTo(face.view.ax, face.view.az);
+          return;
+        }
+        canvas.setPointerCapture(ev.pointerId);
         drag.current = { kind: "orbit", x: ev.clientX, y: ev.clientY };
         setCursor();
         return;
       }
+      canvas.setPointerCapture(ev.pointerId);
       const label = hitLabel(ev);
       drag.current = label
         ? { kind: "piece", x: ev.clientX, y: ev.clientY, label }
@@ -443,8 +474,10 @@ export function Preview({
       }
     };
     const up = () => {
+      const wasOrbit = drag.current.kind === "orbit";
       drag.current.kind = null;
       setCursor();
+      if (wasOrbit) paint();
     };
     const wheel = (ev: WheelEvent) => {
       ev.preventDefault();
@@ -464,6 +497,7 @@ export function Preview({
     paint();
     return () => {
       ro.disconnect();
+      if (snap.current != null) cancelAnimationFrame(snap.current);
       canvas.removeEventListener("pointerdown", down);
       canvas.removeEventListener("pointermove", move);
       canvas.removeEventListener("pointerup", up);
@@ -477,6 +511,8 @@ export function Preview({
   }, [result, mode, showNum, jigColor]);
 
   useEffect(() => {
+    if (snap.current != null) cancelAnimationFrame(snap.current);
+    snap.current = null;
     view2.current = { ...DEFAULT_2D };
     view3.current = { ...DEFAULT_3D };
     paintRef.current();

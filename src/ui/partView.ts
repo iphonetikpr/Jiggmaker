@@ -96,7 +96,7 @@ export function projectJigOrbit(
   return orbitProject(x, y, z, cam.cx, cam.cy, cam.cz, az, ax, cam.sc, viewW, viewH);
 }
 
-function rotateNormal(nx: number, ny: number, nz: number, az: number, ax: number): [number, number, number] {
+export function rotateNormal(nx: number, ny: number, nz: number, az: number, ax: number): [number, number, number] {
   const cs = Math.cos(az),
     sn = Math.sin(az);
   const ca = Math.cos(ax),
