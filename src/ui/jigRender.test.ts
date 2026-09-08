@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { DEFAULTS } from "../constants";
 import { generateJig } from "../cad/generate";
 import { defaultSettings, newObject } from "../cad/history";
@@ -13,7 +14,7 @@ import {
   renderJigMesh,
   viewCubeLayout,
 } from "./jigRender";
-import { previewHint } from "./previewHint";
+import { previewHint, BEFORE_3D_PAN_FOOTER } from "./previewHint";
 
 function rectJob() {
   const settings = { ...defaultSettings(), scaleComp: false };
@@ -40,6 +41,11 @@ describe("3D jig lighting", () => {
     const wall = jigFaceShade([1, 0, 0], 5, 0, 7);
     expect(wall).toBeGreaterThan(0.12);
     expect(wall).toBeLessThan(jigFaceShade([0, 0, 1], 7, 0, 7));
+  });
+
+  it("darkens a pocket wall at the floor vs the rim (per-pixel height AO)", () => {
+    const wall: [number, number, number] = [1, 0, 0];
+    expect(jigFaceShade(wall, 0, 0, 7)).toBeLessThan(jigFaceShade(wall, 7, 0, 7) * 0.75);
   });
 
   it("rasterizes a Mini plate with a brightness range so pockets are not flat", () => {
@@ -82,28 +88,30 @@ describe("3D jig supersample", () => {
     expect(s.w / s.h).not.toBeCloseTo(333 / 88, 1);
   });
 
-  it("drops to 1× while dragging", () => {
+  it("drops toward 1× while dragging but keeps aspect", () => {
     const s = jigPreviewSample(640, 400, 1, true);
-    expect(s.w).toBe(640);
-    expect(s.h).toBe(400);
+    expect(s.scale).toBeLessThan(JIG_SAMPLE_IDLE);
+    expect(s.w / s.h).toBeCloseTo(640 / 400, 6);
   });
 });
 
 describe("viewcube is cubic", () => {
-  it("uses a square well with scX === scY that does not follow Mini 333×88", () => {
-    const wide = viewCubeLayout(900, 400, 0.62, -0.65);
-    const tall = viewCubeLayout(400, 900, 0.62, -0.65);
-    expect(wide.scX).toBe(wide.scY);
-    expect(wide.viewportW).toBe(wide.viewportH);
-    expect(wide.viewportW).toBe(VIEWCUBE.size);
-    expect(wide.viewportW / wide.viewportH).not.toBeCloseTo(333 / 88, 1);
-    expect(tall.sc).toBe(wide.sc);
-    expect(wide.cx).toBeGreaterThan(800);
-    expect(wide.cy).toBeLessThan(80);
+  it("is a square overlay layout that ignores Mini 333×88 and canvas aspect", () => {
+    const a = viewCubeLayout(0.62, -0.65);
+    const b = viewCubeLayout(0.62, -0.65, VIEWCUBE.size);
+    expect(a.scX).toBe(a.scY);
+    expect(a.viewportW).toBe(a.viewportH);
+    expect(a.viewportW).toBe(VIEWCUBE.size);
+    expect(a.viewportW / a.viewportH).toBe(1);
+    expect(a.viewportW / a.viewportH).not.toBeCloseTo(333 / 88, 1);
+    expect(a.cx).toBe(a.viewportW / 2);
+    expect(a.cy).toBe(a.viewportH / 2);
+    expect(b.sc).toBe(a.sc);
+    expect(a.faces.length).toBe(b.faces.length);
   });
 
   it("draws TOP as a square from a top-down view", () => {
-    const layout = viewCubeLayout(900, 400, 0, 0);
+    const layout = viewCubeLayout(0, 0);
     const top = layout.faces.find((f) => f.lbl === "TOP");
     expect(top).toBeTruthy();
     const xs = top!.poly.map((p) => p[0]);
@@ -116,9 +124,9 @@ describe("viewcube is cubic", () => {
     expect(w / h).not.toBeCloseTo(333 / 88, 1);
   });
 
-  it("keeps relative cube geometry identical on 900×400 vs 400×400", () => {
-    const a = viewCubeLayout(900, 400, 0.62, -0.65);
-    const b = viewCubeLayout(400, 400, 0.62, -0.65);
+  it("keeps cube geometry identical regardless of a hypothetical 900×400 vs 400×400 canvas", () => {
+    const a = viewCubeLayout(0.62, -0.65);
+    const b = viewCubeLayout(0.62, -0.65);
     const topA = a.faces.find((f) => f.lbl === "TOP")!;
     const topB = b.faces.find((f) => f.lbl === "TOP")!;
     for (let i = 0; i < 4; i++) {
@@ -128,13 +136,23 @@ describe("viewcube is cubic", () => {
   });
 
   it("hits the front-most face under the cursor", () => {
-    const layout = viewCubeLayout(640, 400, 0, 0);
+    const layout = viewCubeLayout(0, 0);
     const top = layout.faces.find((f) => f.lbl === "TOP")!;
     const cx = (top.poly[0][0] + top.poly[2][0]) / 2;
     const cy = (top.poly[0][1] + top.poly[2][1]) / 2;
     const hit = hitViewCubeFace(layout, cx, cy);
     expect(hit?.lbl).toBe("TOP");
     expect(hit?.view.ax).toBe(0);
+  });
+
+  it("keeps the overlay CSS at 84×84 and aspect-ratio 1:1 (not canvas 100%)", () => {
+    const css = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+    expect(css).toContain(".viewcube");
+    expect(css).toContain("aspect-ratio: 1 / 1");
+    expect(css).toContain("width: 84px");
+    expect(css).toContain("height: 84px");
+    expect(css).toContain(".preview-canvas");
+    expect(css).not.toMatch(/\.canvas-wrap canvas\s*\{/);
   });
 });
 
@@ -143,6 +161,8 @@ describe("preview footer by tab", () => {
     expect(previewHint("jig3d")).toMatch(/orbit|rotate/i);
     expect(previewHint("jig3d")).not.toMatch(/pan/i);
     expect(previewHint("jig3d")).toMatch(/cube face/i);
+    expect(previewHint("jig3d")).not.toBe(BEFORE_3D_PAN_FOOTER);
+    expect(BEFORE_3D_PAN_FOOTER).toMatch(/pan/i);
   });
 
   it("keeps pan + drag piece on Template", () => {

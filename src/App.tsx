@@ -27,7 +27,6 @@ import { NumberField } from "./ui/NumberField";
 import { ObjectCard } from "./ui/ObjectCard";
 import { PartViewport } from "./ui/PartViewport";
 import { Preview } from "./ui/Preview";
-import { previewHint } from "./ui/previewHint";
 import { SummaryCard } from "./ui/SummaryCard";
 import { ThemeToggle } from "./ui/ThemeToggle";
 
@@ -505,7 +504,21 @@ export default function App() {
                 />
               </div>
               <div className="preview-ft">
-                <p className="hint">{previewHint(preview)}</p>
+                <p className="hint">
+                  {preview === "jig3d" ? (
+                    <>
+                      Drag to <b>orbit / rotate</b> the jig · scroll to zoom. Click a cube face to snap the view.
+                    </>
+                  ) : preview === "template" ? (
+                    <>
+                      Scroll to zoom, drag empty space to <b>pan</b>. Drag a piece silhouette to reposition it.
+                    </>
+                  ) : (
+                    <>
+                      Scroll to zoom, drag empty space to <b>pan</b>.
+                    </>
+                  )}
+                </p>
                 <button className="ghost" type="button" onClick={() => setViewReset((n) => n + 1)}>
                   Reset view
                 </button>

@@ -10,3 +10,7 @@ export function previewHint(mode: PreviewMode): string {
   }
   return "Scroll to zoom, drag empty space to pan.";
 }
+
+/** The 3D-tab copy from the before screenshot — must never appear on jig3d. */
+export const BEFORE_3D_PAN_FOOTER =
+  "Scroll to zoom, drag empty space to pan. In Template view, drag a piece to reposition it.";

@@ -7,6 +7,7 @@ import { piecePose } from "../cad/pose";
 import { jigOrbitCamera } from "./partView";
 import {
   JIG_MESH_BG,
+  VIEWCUBE,
   drawViewCube,
   hexToRgb,
   hitViewCubeFace,
@@ -182,7 +183,7 @@ function drawMesh(
   color: string,
   dpr: number,
   dragging: boolean,
-): ViewCubeLayout {
+): void {
   ctx.fillStyle = "#202024";
   ctx.fillRect(0, 0, W, H);
   const tris = result.mesh;
@@ -191,20 +192,33 @@ function drawMesh(
     ctx.font = "13px sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("Añade un objeto para previsualizar el jig", W / 2, H / 2);
-    return viewCubeLayout(W, H, az, ax);
+    return;
   }
   const sample = jigPreviewSample(W, H, dpr, dragging);
   const cam = jigOrbitCamera(result.jig.w, result.jig.h, result.solidH, tris, sample.w, sample.h, zoom);
   const frame = renderJigMesh(tris, cam, az, ax, sample.w, sample.h, hexToRgb(color), JIG_MESH_BG);
   blitFrame(ctx, off, frame.data, frame.w, frame.h, W, H);
-  const cube = viewCubeLayout(W, H, az, ax);
-  drawViewCube(ctx, cube);
   ctx.fillStyle = "#b9b9c2";
   ctx.font = "11px sans-serif";
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.fillText(jigHudCaption(tris.length, result.jig.w, result.jig.h, result.solidH), 12, H - 12);
-  return cube;
+}
+
+function paintViewCube(canvas: HTMLCanvasElement, az: number, ax: number, dpr: number): ViewCubeLayout {
+  const size = VIEWCUBE.size;
+  const px = Math.max(1, Math.round(size * dpr));
+  canvas.width = px;
+  canvas.height = px;
+  canvas.style.width = size + "px";
+  canvas.style.height = size + "px";
+  const ctx = canvas.getContext("2d");
+  const layout = viewCubeLayout(az, ax, size);
+  if (!ctx) return layout;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, size, size);
+  drawViewCube(ctx, layout);
+  return layout;
 }
 
 const DEFAULT_2D = { zoom: 1, panx: 0, pany: 0 };
@@ -226,6 +240,7 @@ export function Preview({
   onMove: (label: string, dx: number, dy: number) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const cubeRef = useRef<HTMLCanvasElement>(null);
   const miniImg = useRef<HTMLImageElement | null>(null);
   const stdImg = useRef<HTMLImageElement | null>(null);
   const offscreen = useRef<HTMLCanvasElement | null>(null);
@@ -265,6 +280,7 @@ export function Preview({
 
   useEffect(() => {
     const canvas = ref.current;
+    const cubeCanvas = cubeRef.current;
     if (!canvas) return;
     const parent = canvas.parentElement!;
 
@@ -302,17 +318,18 @@ export function Preview({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
       if (mode === "jig3d") {
+        if (cubeCanvas) cubeCanvas.hidden = false;
         if (!result) {
           ctx.fillStyle = "#202024";
           ctx.fillRect(0, 0, W, H);
           ctx.fillStyle = "#8a8a92";
           ctx.font = "13px sans-serif";
           ctx.fillText("Añade un objeto para previsualizar el jig", 24, 36);
-          cube.current = null;
+          cube.current = cubeCanvas ? paintViewCube(cubeCanvas, view3.current.az, view3.current.ax, dpr) : null;
           return;
         }
         if (!offscreen.current) offscreen.current = document.createElement("canvas");
-        cube.current = drawMesh(
+        drawMesh(
           ctx,
           offscreen.current,
           result,
@@ -325,8 +342,11 @@ export function Preview({
           dpr,
           drag.current.kind === "orbit",
         );
+        cube.current = cubeCanvas ? paintViewCube(cubeCanvas, view3.current.az, view3.current.ax, dpr) : null;
         return;
       }
+      if (cubeCanvas) cubeCanvas.hidden = true;
+      cube.current = null;
       const tmpl = templateForResult(result);
       const bedImg = tmpl.file === BED_STD.file ? stdImg.current : miniImg.current;
       if (mode === "template") {
@@ -374,9 +394,11 @@ export function Preview({
       return hitPieceLabel(result.placed, world.xy[0], world.xy[1]);
     };
 
-    const localXy = (ev: PointerEvent) => {
-      const { box } = measure();
-      return [ev.clientX - box.left, ev.clientY - box.top] as const;
+    const cubeXy = (ev: PointerEvent) => {
+      if (!cubeCanvas) return [0, 0] as const;
+      const box = cubeCanvas.getBoundingClientRect();
+      const size = VIEWCUBE.size;
+      return [((ev.clientX - box.left) / (box.width || size)) * size, ((ev.clientY - box.top) / (box.height || size)) * size] as const;
     };
 
     const setCursor = (ev?: PointerEvent) => {
@@ -385,14 +407,16 @@ export function Preview({
           canvas.style.cursor = "grabbing";
           return;
         }
-        if (ev && cube.current) {
-          const [x, y] = localXy(ev);
+        if (ev && cube.current && cubeCanvas) {
+          const [x, y] = cubeXy(ev);
           if (hitViewCubeFace(cube.current, x, y)) {
-            canvas.style.cursor = "pointer";
+            cubeCanvas.style.cursor = "pointer";
+            canvas.style.cursor = "grab";
             return;
           }
         }
         canvas.style.cursor = "grab";
+        if (cubeCanvas) cubeCanvas.style.cursor = "pointer";
         return;
       }
       if (drag.current.kind) {
@@ -426,12 +450,6 @@ export function Preview({
 
     const down = (ev: PointerEvent) => {
       if (latest.current.mode === "jig3d") {
-        const [x, y] = localXy(ev);
-        const face = cube.current ? hitViewCubeFace(cube.current, x, y) : null;
-        if (face) {
-          snapTo(face.view.ax, face.view.az);
-          return;
-        }
         canvas.setPointerCapture(ev.pointerId);
         drag.current = { kind: "orbit", x: ev.clientX, y: ev.clientY };
         setCursor();
@@ -489,11 +507,19 @@ export function Preview({
       paint();
     };
 
+    const cubeDown = (ev: PointerEvent) => {
+      ev.stopPropagation();
+      const [x, y] = cubeXy(ev);
+      const face = cube.current ? hitViewCubeFace(cube.current, x, y) : null;
+      if (face) snapTo(face.view.ax, face.view.az);
+    };
+
     canvas.addEventListener("pointerdown", down);
     canvas.addEventListener("pointermove", move);
     canvas.addEventListener("pointerup", up);
     canvas.addEventListener("pointercancel", up);
     canvas.addEventListener("wheel", wheel, { passive: false });
+    cubeCanvas?.addEventListener("pointerdown", cubeDown);
     paint();
     return () => {
       ro.disconnect();
@@ -503,6 +529,7 @@ export function Preview({
       canvas.removeEventListener("pointerup", up);
       canvas.removeEventListener("pointercancel", up);
       canvas.removeEventListener("wheel", wheel);
+      cubeCanvas?.removeEventListener("pointerdown", cubeDown);
     };
   }, []);
 
@@ -518,5 +545,10 @@ export function Preview({
     paintRef.current();
   }, [resetToken]);
 
-  return <canvas ref={ref} />;
+  return (
+    <>
+      <canvas ref={ref} className="preview-canvas" />
+      <canvas ref={cubeRef} className="viewcube" hidden={mode !== "jig3d"} width={VIEWCUBE.size} height={VIEWCUBE.size} />
+    </>
+  );
 }

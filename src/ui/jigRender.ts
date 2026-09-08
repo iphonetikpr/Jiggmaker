@@ -7,8 +7,8 @@ import {
 } from "./partView";
 
 export const JIG_MESH_BG: Rgb = [32, 32, 36];
-export const JIG_SAMPLE_IDLE = 1.5;
-export const JIG_SAMPLE_DRAG = 1;
+export const JIG_SAMPLE_IDLE = 2;
+export const JIG_SAMPLE_DRAG = 1.25;
 export const JIG_SAMPLE_MAX = 2200;
 
 /** Key from upper-right; fill from the opposite side so walls stay readable. */
@@ -100,11 +100,13 @@ export function renderJigMesh(
       nz = ux * vy - uy * vx;
     const nlen = Math.hypot(nx, ny, nz) || 1;
     const vn = rotateNormal(nx / nlen, ny / nlen, nz / nlen, az, ax);
-    const avgZ = (t[2] + t[5] + t[8]) / 3;
-    const shade = jigFaceShade(vn, avgZ, minZ, maxZ);
-    const cr = color[0] * shade,
-      cg = color[1] * shade,
-      cb = color[2] * shade;
+    const ndotKey = Math.max(0, vn[0] * KEY[0] + vn[1] * KEY[1] + vn[2] * KEY[2]);
+    const ndotFill = Math.max(0, vn[0] * FILL[0] + vn[1] * FILL[1] + vn[2] * FILL[2]);
+    const lit = 0.18 + 0.64 * ndotKey + 0.3 * ndotFill;
+    const z0 = t[2],
+      z1 = t[5],
+      z2 = t[8];
+    const floorN = Math.max(0, vn[2]);
 
     const minPx = Math.max(0, Math.floor(Math.min(A[0], B[0], C[0])));
     const maxPx = Math.min(W - 1, Math.ceil(Math.max(A[0], B[0], C[0])));
@@ -125,15 +127,49 @@ export function renderJigMesh(
         const idx = py * W + px;
         if (z <= zbuf[idx]) continue;
         zbuf[idx] = z;
+        const worldZ = (w0 * z0 + w1 * z1 + w2 * z2) / sum;
+        const height01 = (worldZ - minZ) / (maxZ - minZ || 1);
+        const ao = 0.42 + 0.58 * height01 - 0.2 * floorN * (1 - height01);
+        const shade = Math.max(0.08, Math.min(1, lit * ao));
         const di = idx * 4;
-        data[di] = cr;
-        data[di + 1] = cg;
-        data[di + 2] = cb;
+        data[di] = color[0] * shade;
+        data[di + 1] = color[1] * shade;
+        data[di + 2] = color[2] * shade;
         data[di + 3] = 255;
       }
     }
   }
+  applyCavityAo(data, zbuf, W, H);
   return { data, w: W, h: H };
+}
+
+/** Darken pixels sitting behind nearer neighbors — cheap contact shadow in pockets. */
+export function applyCavityAo(data: Uint8ClampedArray, zbuf: Float32Array, w: number, h: number, strength = 0.28): void {
+  const occ = new Float32Array(w * h);
+  const offs = [1, -1, w, -w, w + 1, w - 1, -w + 1, -w - 1];
+  for (let i = 0; i < zbuf.length; i++) {
+    const z = zbuf[i];
+    if (z < -1e20) continue;
+    let hit = 0,
+      n = 0;
+    for (const d of offs) {
+      const j = i + d;
+      if (j < 0 || j >= zbuf.length) continue;
+      const nz = zbuf[j];
+      if (nz < -1e20) continue;
+      n++;
+      if (nz > z + 0.35) hit++;
+    }
+    if (n) occ[i] = hit / n;
+  }
+  for (let i = 0; i < occ.length; i++) {
+    if (occ[i] <= 0) continue;
+    const k = 1 - strength * occ[i];
+    const di = i * 4;
+    data[di] *= k;
+    data[di + 1] *= k;
+    data[di + 2] *= k;
+  }
 }
 
 export function hexToRgb(color: string): Rgb {
@@ -148,10 +184,10 @@ export function jigHudCaption(triCount: number, jigW: number, jigH: number, soli
   return `drag to rotate · scroll to zoom · click a cube face · ${tris} tris · ${jigW.toFixed(0)}×${jigH.toFixed(0)}×${solidH.toFixed(1)} mm`;
 }
 
-/** Square gizmo in CSS pixels. `sc` is identical on X and Y — never the bed 333×88 mapping. */
+/** Square gizmo in CSS pixels. Never uses the preview canvas or bed 333×88 mapping. */
 export const VIEWCUBE = {
   size: 84,
-  margin: 12,
+  margin: 10,
   sc: 22,
 } as const;
 
@@ -188,11 +224,11 @@ export type ViewCubeLayout = {
   faces: ViewCubeFace[];
 };
 
-export function viewCubeLayout(viewW: number, viewH: number, az: number, ax: number): ViewCubeLayout {
+/** Always a square `size×size` layout. Canvas W×H does not affect the gizmo aspect. */
+export function viewCubeLayout(az: number, ax: number, size = VIEWCUBE.size): ViewCubeLayout {
   const sc = VIEWCUBE.sc;
-  const half = VIEWCUBE.size / 2;
-  const cx = Math.max(half + 4, viewW - VIEWCUBE.margin - half);
-  const cy = Math.min(Math.max(half + 4, viewH - half - 4), VIEWCUBE.margin + half);
+  const cx = size / 2;
+  const cy = size / 2;
   const cs = Math.cos(az),
     sn = Math.sin(az);
   const ca = Math.cos(ax),
@@ -214,7 +250,7 @@ export function viewCubeLayout(viewW: number, viewH: number, az: number, ax: num
     const db = b.poly[0][2] + b.poly[1][2] + b.poly[2][2] + b.poly[3][2];
     return da - db;
   });
-  return { cx, cy, sc, scX: sc, scY: sc, viewportW: VIEWCUBE.size, viewportH: VIEWCUBE.size, az, ax, faces: visible };
+  return { cx, cy, sc, scX: sc, scY: sc, viewportW: size, viewportH: size, az, ax, faces: visible };
 }
 
 function pointInPoly(x: number, y: number, poly: Array<[number, number, number]>): boolean {
