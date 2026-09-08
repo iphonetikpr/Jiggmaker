@@ -179,9 +179,10 @@ describe("3D jig orbit camera", () => {
     const jig = jigViewScale(260, 220, 10, 1);
     expect(part).not.toBeCloseTo(jig, 6);
     expect(part / jig).toBeCloseTo(0.46 / 0.42, 8);
-    const origin = orbitProject(0, 0, 0, 0, 0, 0, 0.4, -0.8, part, 260, 220);
-    const x = orbitProject(5, 0, 0, 0, 0, 0, 0.4, -0.8, part, 260, 220);
-    const y = orbitProject(0, 5, 0, 0, 0, 0, 0.4, -0.8, part, 260, 220);
-    expect(Math.hypot(x[0] - origin[0], x[1] - origin[1])).toBeCloseTo(Math.hypot(y[0] - origin[0], y[1] - origin[1]), 8);
+    const origin = orbitProject(0, 0, 0, 0, 0, 0, 0, 0, part, 260, 220);
+    const x = orbitProject(5, 0, 0, 0, 0, 0, 0, 0, part, 260, 220);
+    const y = orbitProject(0, 5, 0, 0, 0, 0, 0, 0, part, 260, 220);
+    expect(Math.hypot(x[0] - origin[0], x[1] - origin[1])).toBeCloseTo(5 * part, 8);
+    expect(Math.hypot(y[0] - origin[0], y[1] - origin[1])).toBeCloseTo(5 * part, 8);
   });
 });
