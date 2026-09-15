@@ -1,6 +1,6 @@
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
-import { SPLIT_DOWEL_DIA, SPLIT_HOLE_DIA, SPLIT_OVERLAP } from "../constants";
+import { SPLIT_DOWEL_DIA, SPLIT_HOLE_DIA, SPLIT_HOLE_DIA_MAX, SPLIT_HOLE_DIA_MIN, SPLIT_OVERLAP } from "../constants";
 import {
   buildSplitZip,
   laserFiles,
@@ -56,8 +56,8 @@ function adjacentPairs(splits: PlateSplit[], axis: "x" | "y"): Array<{ male: Pla
   return out;
 }
 
-/** Mean radius of circle verts on a cut-normal plane around (span, z). */
-function meanRadius(mesh: Tri[], axis: "x" | "y", at: number, span: number, z: number): number {
+/** Mean / min / max diameter of circle verts on a cut-normal plane around (span, z). */
+function ringDia(mesh: Tri[], axis: "x" | "y", at: number, span: number, z: number): { mean: number; min: number; max: number } {
   const ai = axis === "x" ? 0 : 1;
   const si = axis === "x" ? 1 : 0;
   const rs: number[] = [];
@@ -69,7 +69,19 @@ function meanRadius(mesh: Tri[], axis: "x" | "y", at: number, span: number, z: n
     }
   }
   expect(rs.length).toBeGreaterThan(8);
-  return rs.reduce((a, b) => a + b, 0) / rs.length;
+  const mean = (2 * rs.reduce((a, b) => a + b, 0)) / rs.length;
+  return { mean, min: 2 * Math.min(...rs), max: 2 * Math.max(...rs) };
+}
+
+function expectHandSoloHole(dia: { mean: number; min: number; max: number }) {
+  expect(dia.mean).toBeGreaterThanOrEqual(SPLIT_HOLE_DIA_MIN);
+  expect(dia.mean).toBeLessThanOrEqual(SPLIT_HOLE_DIA_MAX);
+  expect(dia.max).toBeLessThan(3.4);
+  expect(dia.max).not.toBeCloseTo(3.5, 1);
+}
+
+function expectHandSoloPin(dia: { mean: number }) {
+  expect(dia.mean).toBeCloseTo(SPLIT_DOWEL_DIA, 2);
 }
 
 describe("PLA plate split", () => {
@@ -143,7 +155,9 @@ describe("PLA plate split", () => {
     }
   });
 
-  it("pairs male Ø3 dowels with female 3.25 holes on the same cut", () => {
+  it("pairs male Ø3 dowels with female 3.2–3.3 holes on the same X cut", () => {
+    expect(SPLIT_HOLE_DIA).toBeGreaterThanOrEqual(SPLIT_HOLE_DIA_MIN);
+    expect(SPLIT_HOLE_DIA).toBeLessThanOrEqual(SPLIT_HOLE_DIA_MAX);
     const r = job({ bed: "333x88", splitPlate: true, scaleComp: false });
     const left = r.splits.find((s) => s.ix === 0)!;
     const right = r.splits.find((s) => s.ix === 1)!;
@@ -155,8 +169,11 @@ describe("PLA plate split", () => {
     expect(male[0].z).toBeCloseTo(r.solidH / 2, 6);
     const pieces = buildSplitMeshes(r);
     const leftMesh = pieces.find((p) => p.split.ix === 0)!.mesh;
+    const rightMesh = pieces.find((p) => p.split.ix === 1)!.mesh;
     const b = meshBBox(leftMesh);
     expect(b.maxX).toBeGreaterThan(left.x1 + SPLIT_OVERLAP - 0.05);
+    expectHandSoloPin(ringDia(leftMesh, "x", left.x1 + SPLIT_OVERLAP, male[0].span, male[0].z));
+    expectHandSoloHole(ringDia(rightMesh, "x", right.x0, female[0].span, female[0].z));
   });
 
   it("relocates blocked dowel centers along the cut instead of dropping the seam", () => {
@@ -188,11 +205,8 @@ describe("PLA plate split", () => {
       const maleMesh = pieces.find((p) => p.split.label === pair.male.label)!.mesh;
       const femaleMesh = pieces.find((p) => p.split.label === pair.female.label)!.mesh;
       expect(meshBBox(maleMesh).maxY).toBeGreaterThan(pair.male.y1 + SPLIT_OVERLAP - 0.05);
-      const pinR = meanRadius(maleMesh, "y", pair.male.y1 + SPLIT_OVERLAP, male[0].span, male[0].z);
-      const holeR = meanRadius(femaleMesh, "y", pair.female.y0, female[0].span, female[0].z);
-      expect(pinR).toBeCloseTo(SPLIT_DOWEL_DIA / 2, 2);
-      expect(holeR).toBeGreaterThanOrEqual(3.2 / 2);
-      expect(holeR).toBeLessThanOrEqual(3.3 / 2);
+      expectHandSoloPin(ringDia(maleMesh, "y", pair.male.y1 + SPLIT_OVERLAP, male[0].span, male[0].z));
+      expectHandSoloHole(ringDia(femaleMesh, "y", pair.female.y0, female[0].span, female[0].z));
     }
     for (const pair of adjacentPairs(r.splits, "x")) {
       const male = dowelSitesFor(pair.male, r).filter((d) => d.axis === "x" && d.role === "male");
@@ -200,8 +214,39 @@ describe("PLA plate split", () => {
       expect(male.length).toBeGreaterThanOrEqual(1);
       expect(female.map((d) => d.span.toFixed(3))).toEqual(male.map((d) => d.span.toFixed(3)));
       const maleMesh = pieces.find((p) => p.split.label === pair.male.label)!.mesh;
+      const femaleMesh = pieces.find((p) => p.split.label === pair.female.label)!.mesh;
       expect(meshBBox(maleMesh).maxX).toBeGreaterThan(pair.male.x1 + SPLIT_OVERLAP - 0.05);
+      expectHandSoloPin(ringDia(maleMesh, "x", pair.male.x1 + SPLIT_OVERLAP, male[0].span, male[0].z));
+      expectHandSoloHole(ringDia(femaleMesh, "x", pair.female.x0, female[0].span, female[0].z));
     }
+  });
+
+  it("keeps Hand Solo hole Ø 3.2–3.3 after scaleComp (not ~3.5)", () => {
+    const settings: JobSettings = {
+      ...defaultSettings(),
+      scaleComp: true,
+      bed: "333x418",
+      splitPlate: true,
+      maxPrintBed: 250,
+    };
+    const obj = newObject(0);
+    obj.name = "coin";
+    obj.count = 12;
+    obj.rectW = 50;
+    obj.rectH = 30;
+    obj.mode = "rectangle";
+    const r = generateJig([obj], {}, settings, {});
+    expect(r.meshXform.s).toBeCloseTo(1.003, 6);
+    const xf = r.meshXform;
+    const pieces = buildSplitMeshes(r);
+    const pair = adjacentPairs(r.splits, "y")[0];
+    const female = dowelSitesFor(pair.female, r).filter((d) => d.axis === "y" && d.role === "female");
+    expect(female.length).toBeGreaterThanOrEqual(1);
+    const mesh = pieces.find((p) => p.split.label === pair.female.label)!.mesh;
+    const at = xf.cy + (female[0].at - xf.cy) * xf.s;
+    const span = xf.cx + (female[0].span - xf.cx) * xf.s;
+    const z = female[0].z * xf.s;
+    expectHandSoloHole(ringDia(mesh, "y", at, span, z));
   });
 
   it("does not place dowels through pockets", () => {
