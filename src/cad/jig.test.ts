@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULTS, FRAME_PLATE, HISTORY_KEY, MINI_BED, POCKET_DEPTH_EXTRA, SCALE_COMP } from "../constants";
+import { DEFAULTS, FRAME_PLATE, HISTORY_KEY, MINI_BED, POCKET_DEPTH_EXTRA, SCALE_COMP, SPLIT_DOWEL_DIA, SPLIT_HOLE_DIA, SPLIT_HOLE_DIA_MAX, SPLIT_HOLE_DIA_MIN } from "../constants";
 import { toDXF } from "./dxf";
 import { exportBasename } from "./filename";
 import { generateJig } from "./generate";
@@ -36,6 +36,11 @@ describe("locked constants", () => {
     expect(DEFAULTS.maxPrintBed).toBe(250);
     expect(DEFAULTS.qty).toBe(1);
     expect(HISTORY_KEY).toBe("eufyJig.history.v1");
+    expect(SPLIT_DOWEL_DIA).toBe(3.0);
+    expect(SPLIT_HOLE_DIA).toBe(3.25);
+    expect(SPLIT_HOLE_DIA).toBeGreaterThanOrEqual(SPLIT_HOLE_DIA_MIN);
+    expect(SPLIT_HOLE_DIA).toBeLessThanOrEqual(SPLIT_HOLE_DIA_MAX);
+    expect(SPLIT_HOLE_DIA).toBeLessThan(3.4);
   });
 
   it("starts a single object at quantity 1", () => {

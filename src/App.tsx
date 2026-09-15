@@ -684,7 +684,7 @@ export default function App() {
             </p>
             <p>
               <b>4 · Impresión FDM.</b> Objetivo 250×250×250. Placas 333/334 se asumen H2 por defecto; aviso + maxPrintBed
-              250 y opción split (N STLs con dowels Ø3.0 / agujero 3.25, overlap 2.5 mm; ZIP con las N piezas).
+              250 y opción split (N STLs con dowels Ø3.0 / agujero 3.25 (3.2–3.3, no ~3.5), overlap 2.5 mm; ZIP con las N piezas).
             </p>
             <p>
               Importa la plantilla en eufyMake Studio a tamaño de cama, coloca el arte en los contornos, oculta la

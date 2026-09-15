@@ -97,5 +97,9 @@ export const PRINT_TARGET = 250;
 /** PLA split joints (Hand Solo): dowels on the cut face, not through pockets. */
 export const SPLIT_OVERLAP = 2.5;
 export const SPLIT_DOWEL_DIA = 3.0;
+/** Hand Solo: female hole must be 3.2–3.3 mm (not a loose ~3.5). */
+export const SPLIT_HOLE_DIA_MIN = 3.2;
+export const SPLIT_HOLE_DIA_MAX = 3.3;
+/** 0.25 mm clearance on the Ø3.0 pin — inside the 3.2–3.3 window. */
 export const SPLIT_HOLE_DIA = 3.25;
 export const SPLIT_TAB_INSET = 14;
