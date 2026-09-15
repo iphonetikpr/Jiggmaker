@@ -1,6 +1,6 @@
 import earcut from "earcut";
 import { POCKET_DEPTH_EXTRA, SCALE_COMP } from "../constants";
-import type { Loop, Tri } from "../types";
+import type { Loop, MeshPocket, Tri } from "../types";
 import { circleLoop, ensureCCW, ensureCW, polyArea } from "./geom";
 
 function flatten(outer: Loop, holes: Loop[]): { vertices: number[]; holeIndices: number[] } {
@@ -77,11 +77,7 @@ function cap(out: Tri[], outer: Loop, holes: Loop[], z: number, up: boolean) {
   }
 }
 
-export interface PocketSpec {
-  loops: Loop[];
-  holes?: Loop[];
-  pick?: { cx: number; cy: number; r: number } | null;
-}
+export type PocketSpec = MeshPocket;
 
 export function solidHeight(baseThk: number, pocketDepth: number): number {
   return baseThk <= 0 ? Math.max(0.4, pocketDepth) : baseThk + pocketDepth;
@@ -97,6 +93,61 @@ export function plateMeshXform(outer: Loop, scaleComp: boolean): { cx: number; c
     n++;
   }
   return { cx: cx / (n || 1), cy: cy / (n || 1), s: scaleComp ? SCALE_COMP : 1 };
+}
+
+export function applyMeshXform(tris: Tri[], xf: { cx: number; cy: number; s: number }): Tri[] {
+  if (xf.s === 1) return tris;
+  for (const t of tris) {
+    for (let i = 0; i < 9; i += 3) {
+      t[i] = xf.cx + (t[i] - xf.cx) * xf.s;
+      t[i + 1] = xf.cy + (t[i + 1] - xf.cy) * xf.s;
+      t[i + 2] *= xf.s;
+    }
+  }
+  return tris;
+}
+
+export function meshBBox(tris: Tri[]): { minX: number; minY: number; minZ: number; maxX: number; maxY: number; maxZ: number } {
+  let minX = Infinity,
+    minY = Infinity,
+    minZ = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity,
+    maxZ = -Infinity;
+  for (const t of tris) {
+    for (let i = 0; i < 9; i += 3) {
+      const x = t[i],
+        y = t[i + 1],
+        z = t[i + 2];
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (z < minZ) minZ = z;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+      if (z > maxZ) maxZ = z;
+    }
+  }
+  if (!isFinite(minX)) return { minX: 0, minY: 0, minZ: 0, maxX: 0, maxY: 0, maxZ: 0 };
+  return { minX, minY, minZ, maxX, maxY, maxZ };
+}
+
+/** Count edges not shared by exactly two triangles (0 ⇒ closed 2-manifold). */
+export function meshNonManifoldEdges(tris: Tri[]): number {
+  const uses = new Map<string, number>();
+  const q = (n: number) => Math.round(n * 1e5) / 1e5;
+  const vk = (x: number, y: number, z: number) => `${q(x)},${q(y)},${q(z)}`;
+  const ek = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+  for (const t of tris) {
+    const vs = [vk(t[0], t[1], t[2]), vk(t[3], t[4], t[5]), vk(t[6], t[7], t[8])];
+    if (vs[0] === vs[1] || vs[1] === vs[2] || vs[2] === vs[0]) continue;
+    for (let i = 0; i < 3; i++) {
+      const k = ek(vs[i], vs[(i + 1) % 3]);
+      uses.set(k, (uses.get(k) || 0) + 1);
+    }
+  }
+  let bad = 0;
+  for (const c of uses.values()) if (c !== 2) bad++;
+  return bad;
 }
 
 export function extrudePlate(
@@ -146,15 +197,7 @@ export function extrudePlate(
   }
 
   const xf = plateMeshXform(outer, scaleComp);
-  if (xf.s !== 1) {
-    for (const t of out) {
-      for (let i = 0; i < 9; i += 3) {
-        t[i] = xf.cx + (t[i] - xf.cx) * xf.s;
-        t[i + 1] = xf.cy + (t[i + 1] - xf.cy) * xf.s;
-        t[i + 2] *= xf.s;
-      }
-    }
-  }
+  applyMeshXform(out, xf);
   return out;
 }
 

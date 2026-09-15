@@ -549,7 +549,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => {
-                  const f = laserFiles(result, stem).find((x) => x.name.endsWith("_POCKET.dxf") || x.name.includes("_s1_POCKET"));
+                  const f = laserFiles(result, stem).find((x) => x.name.endsWith("_POCKET.dxf"));
                   if (f) downloadBytes(f.name, f.data, f.mime);
                 }}
               >
@@ -559,7 +559,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => {
-                  const f = laserFiles(result, stem).find((x) => x.name.endsWith("_BASE.dxf") || x.name.includes("_s1_BASE.dxf"));
+                  const f = laserFiles(result, stem).find((x) => x.name.endsWith("_BASE.dxf"));
                   if (f) downloadBytes(f.name, f.data, f.mime);
                 }}
               >
@@ -569,7 +569,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => {
-                  const f = laserFiles(result, stem).find((x) => x.name.endsWith("_POCKET.svg") || x.name.includes("_s1_POCKET.svg"));
+                  const f = laserFiles(result, stem).find((x) => x.name.endsWith("_POCKET.svg"));
                   if (f) downloadBytes(f.name, f.data, f.mime);
                 }}
               >
@@ -579,7 +579,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => {
-                  const f = laserFiles(result, stem).find((x) => x.name.endsWith("_BASE.svg") || x.name.includes("_s1_BASE.svg"));
+                  const f = laserFiles(result, stem).find((x) => x.name.endsWith("_BASE.svg"));
                   if (f) downloadBytes(f.name, f.data, f.mime);
                 }}
               >
@@ -589,18 +589,22 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => {
-                  const f = stlFiles(result, stem)[0];
-                  downloadBytes(f.name, f.data, f.mime);
+                  const files = stlFiles(result, stem).filter((x) => !x.name.includes("_ascii"));
+                  for (const f of files) downloadBytes(f.name, f.data, f.mime);
                 }}
               >
                 <b>Jig STL</b>
-                <span>un sólido{settings.scaleComp ? " · ×1.003" : ""}</span>
+                <span>
+                  {result.splits.length
+                    ? `${result.splits.length} piezas`
+                    : `un sólido${settings.scaleComp ? " · ×1.003" : ""}`}
+                </span>
               </button>
               <button
                 type="button"
                 onClick={() => {
-                  const f = stlFiles(result, stem).find((x) => x.name.includes("_ascii"));
-                  if (f) downloadBytes(f.name, f.data, f.mime);
+                  const files = stlFiles(result, stem).filter((x) => x.name.includes("_ascii"));
+                  for (const f of files) downloadBytes(f.name, f.data, f.mime);
                 }}
               >
                 <b>STL ASCII</b>
@@ -634,7 +638,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => {
-                    for (const f of [...laserFiles(result, stem), ...stlFiles(result, stem)]) {
+                    for (const f of stlFiles(result, stem)) {
                       downloadBytes(f.name, f.data, f.mime);
                     }
                   }}
@@ -677,7 +681,7 @@ export default function App() {
             </p>
             <p>
               <b>4 · Impresión FDM.</b> Objetivo 250×250×250. Placas 333/334 se asumen H2 por defecto; aviso + maxPrintBed
-              250 y opción split.
+              250 y opción split (N STLs con dowels Ø3.0 / agujero 3.25, overlap 2.5 mm).
             </p>
             <p>
               Importa la plantilla en eufyMake Studio a tamaño de cama, coloca el arte en los contornos, oculta la

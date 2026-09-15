@@ -93,3 +93,9 @@ export const LAYER_ACI: Record<string, number> = {
 
 export const MAX_OBJECTS = 3;
 export const PRINT_TARGET = 250;
+
+/** PLA split joints (Hand Solo): dowels on the cut face, not through pockets. */
+export const SPLIT_OVERLAP = 2.5;
+export const SPLIT_DOWEL_DIA = 3.0;
+export const SPLIT_HOLE_DIA = 3.25;
+export const SPLIT_TAB_INSET = 14;

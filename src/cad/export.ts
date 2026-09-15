@@ -1,8 +1,8 @@
 import type { Entity, JigResult } from "../types";
 import { toDXF } from "./dxf";
 import { exportBasename } from "./filename";
-import { clipEntitiesX, splitMeshX } from "./generate";
 import { toAsciiSTL, toBinarySTL } from "./mesh";
+import { buildSplitMeshes } from "./split";
 import { toSVG } from "./svg";
 
 export interface ExportFile {
@@ -31,36 +31,21 @@ export function baseName(result: JigResult, objectName: string): string {
   return exportBasename(name, result.plateName, result.totalUnits);
 }
 
-function splitOrAll<T>(
-  result: JigResult,
-  build: (x0: number, x1: number, tag: string) => T,
-): T[] {
-  if (!result.splits.length) return [build(0, result.jig.w, "")];
-  return result.splits.map((s) => build(s.x0, s.x1, `_${s.label}`));
-}
-
 export function laserFiles(result: JigResult, stem: string): ExportFile[] {
   const files: ExportFile[] = [];
   const w = result.jig.w;
   const h = result.jig.h;
-  const pushSvgDxf = (kind: "POCKET" | "BASE", entities: Entity[]) => {
-    for (const piece of splitOrAll(result, (x0, x1, tag) => ({ x0, x1, tag }))) {
-      const ents =
-        piece.tag && result.splits.length
-          ? clipEntitiesX(entities, piece.x0, piece.x1, true)
-          : entities;
-      const pw = piece.tag ? piece.x1 - piece.x0 : w;
-      files.push({
-        name: `${stem}${piece.tag}_${kind}.dxf`,
-        mime: "application/dxf",
-        data: toDXF(ents),
-      });
-      files.push({
-        name: `${stem}${piece.tag}_${kind}.svg`,
-        mime: "image/svg+xml",
-        data: toSVG(pw, h, ents),
-      });
-    }
+  const pushSvgDxf = (kind: "POCKET" | "BASE", entities: typeof result.laser.pocketEntities) => {
+    files.push({
+      name: `${stem}_${kind}.dxf`,
+      mime: "application/dxf",
+      data: toDXF(entities),
+    });
+    files.push({
+      name: `${stem}_${kind}.svg`,
+      mime: "image/svg+xml",
+      data: toSVG(w, h, entities),
+    });
   };
   pushSvgDxf("POCKET", result.laser.pocketEntities);
   pushSvgDxf("BASE", result.laser.baseEntities);
@@ -78,14 +63,13 @@ export function stlFiles(result: JigResult, stem: string): ExportFile[] {
     });
     return files;
   }
-  for (const s of result.splits) {
-    const mesh = splitMeshX(result.mesh, s.x0, s.x1);
-    const tag = `${stem}_${s.label}`;
-    files.push({ name: `${tag}.stl`, mime: "model/stl", data: toBinarySTL(mesh) });
+  for (const piece of buildSplitMeshes(result)) {
+    const tag = `${stem}_${piece.split.label}`;
+    files.push({ name: `${tag}.stl`, mime: "model/stl", data: toBinarySTL(piece.mesh) });
     files.push({
       name: `${tag}_ascii.stl`,
       mime: "model/stl",
-      data: toAsciiSTL(mesh, tag),
+      data: toAsciiSTL(piece.mesh, tag),
     });
   }
   return files;
