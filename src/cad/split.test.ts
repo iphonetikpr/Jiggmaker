@@ -1,6 +1,14 @@
+import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
 import { SPLIT_OVERLAP } from "../constants";
-import { laserFiles, stlFiles } from "./export";
+import {
+  buildSplitZip,
+  laserFiles,
+  offersSplitZip,
+  splitBinaryStls,
+  splitZipName,
+  stlFiles,
+} from "./export";
 import { generateJig } from "./generate";
 import { pointInPoly } from "./geom";
 import { defaultSettings, newObject } from "./history";
@@ -132,5 +140,56 @@ describe("PLA plate split", () => {
     }
     const svg = laserFiles(r, "coin_MiniFrame_2up").find((f) => f.name.endsWith("_POCKET.svg"));
     expect(String(svg?.data)).toContain('viewBox="0 0 334 90"');
+  });
+});
+
+describe("split STL ZIP", () => {
+  it("is offered only when split yields N>1 pieces", () => {
+    const unsplit = job({ bed: "333x418", splitPlate: false });
+    expect(offersSplitZip(unsplit)).toBe(false);
+    expect(splitBinaryStls(unsplit, "coin_Large_2up")).toHaveLength(0);
+    expect(splitZipName("coin_Large_2up")).toBe("coin_Large_2up_split.zip");
+
+    const split = job({ bed: "333x418", splitPlate: true, maxPrintBed: 250 });
+    expect(split.splits.length).toBeGreaterThan(1);
+    expect(offersSplitZip(split)).toBe(true);
+  });
+
+  it("names the archive from the existing stem (bed + up-count)", () => {
+    expect(splitZipName("coin_Large_2up")).toBe("coin_Large_2up_split.zip");
+    expect(splitZipName("coin_Mini_2up")).toBe("coin_Mini_2up_split.zip");
+    expect(splitZipName("coin_MiniFrame_2up")).toBe("coin_MiniFrame_2up_split.zip");
+    expect(splitZipName("token_Custom_1up")).toBe("token_Custom_1up_split.zip");
+  });
+
+  it("packs the same binary _splitKofN.stl files as individual downloads", async () => {
+    const r = job({ bed: "333x418", splitPlate: true, maxPrintBed: 250 });
+    const stem = "coin_Large_2up";
+    const binaries = splitBinaryStls(r, stem);
+    expect(binaries.length).toBe(r.splits.length);
+    expect(binaries.length).toBeGreaterThan(1);
+    expect(binaries.every((f) => /_split\d+of\d+\.stl$/.test(f.name))).toBe(true);
+    expect(binaries.some((f) => f.name.includes("_ascii"))).toBe(false);
+
+    const individuals = stlFiles(r, stem).filter((f) => f.name.endsWith(".stl") && !f.name.includes("_ascii"));
+    expect(binaries.map((f) => f.name)).toEqual(individuals.map((f) => f.name));
+
+    const zipBytes = await buildSplitZip(r, stem);
+    const zip = await JSZip.loadAsync(zipBytes);
+    const packed = Object.keys(zip.files).filter((n) => !zip.files[n].dir).sort();
+    expect(packed).toEqual(binaries.map((f) => f.name).sort());
+    expect(packed.some((n) => n.includes("_ascii"))).toBe(false);
+    expect(packed.some((n) => n.endsWith(".dxf") || n.endsWith(".svg"))).toBe(false);
+
+    for (const f of binaries) {
+      const entry = await zip.file(f.name)!.async("uint8array");
+      expect(entry).toEqual(new Uint8Array(f.data as ArrayBuffer));
+    }
+  });
+
+  it("does not change laser exports when zipping split STLs", () => {
+    const r = job({ bed: "333x418", splitPlate: true, maxPrintBed: 250 });
+    const files = laserFiles(r, "coin_Large_2up");
+    expect(files.every((f) => !f.name.includes("split") && !f.name.endsWith(".zip"))).toBe(true);
   });
 });
