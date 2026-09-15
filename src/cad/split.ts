@@ -10,6 +10,7 @@ import {
   bboxOf,
   clipLoopToRect,
   ensureCCW,
+  ensureCW,
   mergeCollinear,
   pointInPoly,
   polyArea,
@@ -170,7 +171,7 @@ function addFace(
   for (const h of holes) {
     if (h.length < 3) continue;
     holeIdx.push(verts.length / 2);
-    add(h);
+    add(ensureCW(h));
   }
   const idx = earcut(verts, holeIdx, 2);
   for (let i = 0; i < idx.length; i += 3) {
@@ -208,18 +209,15 @@ function addTube(
   out: Tri[],
   axis: "x" | "y",
   at: number,
-  span: number,
-  z: number,
+  ring: Loop,
   dir: 1 | -1,
   length: number,
-  r: number,
-  segs = 20,
+  hole: boolean,
 ) {
+  const segs = ring.length;
   const pt = (i: number, along: number): [number, number, number] => {
-    const a = (i / segs) * Math.PI * 2;
-    const cu = Math.cos(a) * r,
-      sv = Math.sin(a) * r;
-    return axis === "x" ? [at + dir * along, span + cu, z + sv] : [span + cu, at + dir * along, z + sv];
+    const [u, v] = ring[i];
+    return axis === "x" ? [at + dir * along, u, v] : [u, at + dir * along, v];
   };
   for (let i = 0; i < segs; i++) {
     const j = (i + 1) % segs;
@@ -227,7 +225,8 @@ function addTube(
       a1 = pt(j, 0),
       b0 = pt(i, length),
       b1 = pt(j, length);
-    if (dir === 1) {
+    const invert = hole ? dir === 1 : dir !== 1;
+    if (!invert) {
       pushTri(out, a0[0], a0[1], a0[2], a1[0], a1[1], a1[2], b1[0], b1[1], b1[2]);
       pushTri(out, a0[0], a0[1], a0[2], b1[0], b1[1], b1[2], b0[0], b0[1], b0[2]);
     } else {
@@ -299,16 +298,17 @@ function attachConnectors(mesh: Tri[], s: PlateSplit, result: JigResult): Tri[] 
           ? [-1, 0, 0]
           : [0, -1, 0];
     addFace(extra, axis, at, outer, holes, outward);
-    for (const g of group) {
-      addTube(extra, axis, at, g.span, g.z, 1, SPLIT_OVERLAP, r);
-      addFace(
-        extra,
-        axis,
-        at + SPLIT_OVERLAP,
-        circle2(g.span, g.z, r),
-        [],
-        axis === "x" ? [1, 0, 0] : [0, 1, 0],
-      );
+    const farNormal: [number, number, number] =
+      role === "male"
+        ? axis === "x"
+          ? [1, 0, 0]
+          : [0, 1, 0]
+        : axis === "x"
+          ? [-1, 0, 0]
+          : [0, -1, 0];
+    for (let i = 0; i < group.length; i++) {
+      addTube(extra, axis, at, holes[i], 1, SPLIT_OVERLAP, role === "female");
+      addFace(extra, axis, at + SPLIT_OVERLAP, holes[i], [], farNormal);
     }
   }
   return kept.concat(extra);
