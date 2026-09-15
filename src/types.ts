@@ -139,6 +139,25 @@ export interface BedSize {
   id: string;
 }
 
+/** One PLA print segment when split is on. Bounds are plate mm before scaleComp. */
+export interface PlateSplit {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  ix: number;
+  iy: number;
+  nx: number;
+  ny: number;
+  label: string;
+}
+
+export interface MeshPocket {
+  loops: Loop[];
+  holes?: Loop[];
+  pick?: { cx: number; cy: number; r: number } | null;
+}
+
 export interface JigResult {
   placed: PlacedPiece[];
   jig: { w: number; h: number; cornerR: number };
@@ -163,7 +182,7 @@ export interface JigResult {
   frameOn: boolean;
   oversized: boolean;
   splitNeeded: boolean;
-  splits: Array<{ x0: number; x1: number; label: string }>;
+  splits: PlateSplit[];
   warn: string | null;
   /** Bed mm → plate mm (frame / tight). Same delta used for mesh pockets and laser CUT. */
   plateOffset: { x: number; y: number };
@@ -171,4 +190,8 @@ export interface JigResult {
   meshXform: { cx: number; cy: number; s: number };
   /** Unscaled solid height (base + pocket, or through-hole thickness). */
   solidH: number;
+  plateOuter: Loop;
+  meshPockets: MeshPocket[];
+  baseThk: number;
+  pocketDepth: number;
 }

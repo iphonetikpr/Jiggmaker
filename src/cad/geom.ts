@@ -184,3 +184,77 @@ export function sanitizeName(name: string, fallback = "jig"): string {
     .slice(0, 30);
   return s || fallback;
 }
+
+function intersectAtX(a: Pt, b: Pt, x: number): Pt {
+  const dx = b[0] - a[0];
+  if (Math.abs(dx) < 1e-15) return [x, a[1]];
+  const t = (x - a[0]) / dx;
+  return [x, a[1] + t * (b[1] - a[1])];
+}
+
+function intersectAtY(a: Pt, b: Pt, y: number): Pt {
+  const dy = b[1] - a[1];
+  if (Math.abs(dy) < 1e-15) return [a[0], y];
+  const t = (y - a[1]) / dy;
+  return [a[0] + t * (b[0] - a[0]), y];
+}
+
+function clipPolyHalf(poly: Loop, inside: (p: Pt) => boolean, intersect: (a: Pt, b: Pt) => Pt): Loop {
+  if (poly.length < 3) return [];
+  const out: Loop = [];
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    const aIn = inside(a);
+    const bIn = inside(b);
+    if (bIn) {
+      if (!aIn) out.push(intersect(a, b));
+      out.push(b);
+    } else if (aIn) {
+      out.push(intersect(a, b));
+    }
+  }
+  return out;
+}
+
+/** Convex clip of a (possibly concave) loop to an axis-aligned rectangle. */
+export function clipLoopToRect(loop: Loop, x0: number, y0: number, x1: number, y1: number): Loop {
+  let poly = loop;
+  poly = clipPolyHalf(poly, (p) => p[0] >= x0 - 1e-12, (a, b) => intersectAtX(a, b, x0));
+  poly = clipPolyHalf(poly, (p) => p[0] <= x1 + 1e-12, (a, b) => intersectAtX(a, b, x1));
+  poly = clipPolyHalf(poly, (p) => p[1] >= y0 - 1e-12, (a, b) => intersectAtY(a, b, y0));
+  poly = clipPolyHalf(poly, (p) => p[1] <= y1 + 1e-12, (a, b) => intersectAtY(a, b, y1));
+  return cleanLoop(poly, 1e-9);
+}
+
+/** Drop middle vertices that lie on a straight edge so cut sides are a single segment. */
+export function mergeCollinear(loop: Loop, eps = 1e-7): Loop {
+  if (loop.length < 3) return loop;
+  const keep = (a: Pt, b: Pt, c: Pt) => {
+    const cross = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+    const dot = (b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1]);
+    return Math.abs(cross) > eps || dot < 0;
+  };
+  const pts = loop.slice();
+  let changed = true;
+  while (changed && pts.length >= 3) {
+    changed = false;
+    for (let i = 0; i < pts.length; ) {
+      const a = pts[(i + pts.length - 1) % pts.length];
+      const b = pts[i];
+      const c = pts[(i + 1) % pts.length];
+      if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 1e-9) {
+        pts.splice(i, 1);
+        changed = true;
+        continue;
+      }
+      if (!keep(a, b, c)) {
+        pts.splice(i, 1);
+        changed = true;
+        continue;
+      }
+      i++;
+    }
+  }
+  return pts;
+}

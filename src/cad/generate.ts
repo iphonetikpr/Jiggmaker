@@ -5,6 +5,7 @@ import { applyMoves, packObjects, shiftPiece } from "./layout";
 import { extrudePlate, plateMeshXform, solidHeight } from "./mesh";
 import { bedFromSettings, plateLabel } from "./filename";
 import { prepareObject } from "./prepare";
+import { planPlateSplits } from "./split";
 
 function addReg(entities: Entity[]) {
   entities.push({ layer: "REG", points: [
@@ -178,15 +179,7 @@ export function generateJig(
 
   const maxBed = settings.maxPrintBed || 250;
   const oversized = jigW > maxBed + 1e-6 || jigH > maxBed + 1e-6;
-  const splits: JigResult["splits"] = [];
-  if (settings.splitPlate && oversized) {
-    const long = jigW >= jigH ? jigW : jigH;
-    const n = Math.max(2, Math.ceil(long / maxBed));
-    const piece = long / n;
-    for (let i = 0; i < n; i++) {
-      splits.push({ x0: i * piece, x1: Math.min(long, (i + 1) * piece), label: `s${i + 1}` });
-    }
-  }
+  const splits = settings.splitPlate && oversized ? planPlateSplits(jigW, jigH, maxBed) : [];
 
   let warn: string | null = null;
   if (!pack.fits) {
@@ -226,6 +219,10 @@ export function generateJig(
     plateOffset,
     meshXform,
     solidH,
+    plateOuter: outer,
+    meshPockets,
+    baseThk: settings.baseThk,
+    pocketDepth: settings.pocketDepth,
   };
 }
 
