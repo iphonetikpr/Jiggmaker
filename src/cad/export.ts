@@ -1,9 +1,13 @@
+import JSZip from "jszip";
 import type { Entity, JigResult } from "../types";
 import { toDXF } from "./dxf";
 import { exportBasename } from "./filename";
 import { toAsciiSTL, toBinarySTL } from "./mesh";
 import { buildSplitMeshes } from "./split";
 import { toSVG } from "./svg";
+
+/** Binary piece names: `{stem}_splitKofN.stl` (not `_ascii`). */
+const SPLIT_BINARY_STL = /_split\d+of\d+\.stl$/i;
 
 export interface ExportFile {
   name: string;
@@ -73,6 +77,37 @@ export function stlFiles(result: JigResult, stem: string): ExportFile[] {
     });
   }
   return files;
+}
+
+export function isSplitBinaryStl(name: string): boolean {
+  return SPLIT_BINARY_STL.test(name);
+}
+
+/** Binary `_splitKofN.stl` pieces only — same files as individual Jig STL downloads. */
+export function splitBinaryStls(result: JigResult, stem: string): ExportFile[] {
+  return stlFiles(result, stem).filter((f) => isSplitBinaryStl(f.name));
+}
+
+export function offersSplitZip(result: JigResult): boolean {
+  return result.splits.length > 1;
+}
+
+/** `{name}_{Mini|Large|MiniFrame|…}_{N}up_split.zip` when stem already has the up-count. */
+export function splitZipName(stem: string): string {
+  return `${stem}_split.zip`;
+}
+
+export async function buildSplitZip(result: JigResult, stem: string): Promise<ArrayBuffer> {
+  const zip = new JSZip();
+  for (const f of splitBinaryStls(result, stem)) {
+    zip.file(f.name, f.data);
+  }
+  return zip.generateAsync({ type: "arraybuffer" });
+}
+
+export async function downloadSplitZip(result: JigResult, stem: string): Promise<void> {
+  const data = await buildSplitZip(result, stem);
+  downloadBytes(splitZipName(stem), data, "application/zip");
 }
 
 export function templateSvg(result: JigResult, stem: string): ExportFile {

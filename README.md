@@ -32,7 +32,7 @@ Laser = two bonded sheets (POCKET + BASE). 3D = one solid. Base thickness 0 = th
 
 ### Exports
 
-`{name}_{bed}_{N}up_POCKET|BASE.dxf/.svg` · `{…}.stl` / `_ascii.stl` · `_TEMPLATE.svg` · `_TEMPLATE_{dpi}dpi.png` · `_CONTOURS.svg`
+`{name}_{bed}_{N}up_POCKET|BASE.dxf/.svg` · `{…}.stl` / `_ascii.stl` · `{…}_split.zip` (split, N>1, binary pieces) · `_TEMPLATE.svg` · `_TEMPLATE_{dpi}dpi.png` · `_CONTOURS.svg`
 
 SVG/DXF layers: CUT/POCKET/OUTLINE → red / ACI 1 · SCORE/GUIDE/REG → blue / ACI 5 · BED gray · TEXT `#222` · DXF `$INSUNITS=4` (mm).
 
