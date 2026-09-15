@@ -68,13 +68,28 @@ export function planPlateSplits(jigW: number, jigH: number, maxBed: number): Pla
   return splits;
 }
 
-export function dowelCenters(span0: number, span1: number): number[] {
+function distToSeg(p: Pt, a: Pt, b: Pt): number {
+  const dx = b[0] - a[0],
+    dy = b[1] - a[1];
+  const len2 = dx * dx + dy * dy;
+  if (len2 < 1e-12) return Math.hypot(p[0] - a[0], p[1] - a[1]);
+  let t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+}
+
+function spanWindow(span0: number, span1: number): { a: number; b: number; inset: number; lo: number; hi: number; len: number } {
   const a = Math.min(span0, span1);
   const b = Math.max(span0, span1);
   const len = b - a;
   const r = SPLIT_HOLE_DIA / 2;
   let inset = SPLIT_TAB_INSET;
   if (len < inset * 2 + SPLIT_HOLE_DIA + 4) inset = Math.max(r + 3, (len - SPLIT_HOLE_DIA - 4) / 2);
+  return { a, b, inset, lo: a + inset, hi: b - inset, len };
+}
+
+export function dowelCenters(span0: number, span1: number): number[] {
+  const { a, b, inset, len } = spanWindow(span0, span1);
   const usable = len - 2 * inset;
   if (usable < SPLIT_HOLE_DIA) {
     if (len > SPLIT_HOLE_DIA + 6) return [(a + b) / 2];
@@ -90,15 +105,16 @@ export function dowelCenters(span0: number, span1: number): number[] {
 }
 
 function pocketContains(pockets: MeshPocket[], x: number, y: number, pad: number): boolean {
+  const pt: Pt = [x, y];
   for (const p of pockets) {
     for (const loop of p.loops) {
       if (loop.length < 3) continue;
-      if (pointInPoly([x, y], loop)) return true;
+      if (pointInPoly(pt, loop)) return true;
       if (pad > 0) {
         const b = bboxOf([loop]);
         if (x < b.minX - pad || x > b.maxX + pad || y < b.minY - pad || y > b.maxY + pad) continue;
-        for (const [px, py] of loop) {
-          if (Math.hypot(px - x, py - y) <= pad) return true;
+        for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {
+          if (distToSeg(pt, loop[j], loop[i]) <= pad) return true;
         }
       }
     }
@@ -236,12 +252,10 @@ function addTube(
   }
 }
 
-function jointsOf(
-  s: PlateSplit,
-  jigW: number,
-  jigH: number,
-): Array<{ axis: "x" | "y"; at: number; role: "male" | "female"; span0: number; span1: number }> {
-  const j: Array<{ axis: "x" | "y"; at: number; role: "male" | "female"; span0: number; span1: number }> = [];
+type Joint = { axis: "x" | "y"; at: number; role: "male" | "female"; span0: number; span1: number };
+
+function jointsOf(s: PlateSplit, jigW: number, jigH: number): Joint[] {
+  const j: Joint[] = [];
   if (s.x0 > 1e-6) j.push({ axis: "x", at: s.x0, role: "female", span0: s.y0, span1: s.y1 });
   if (s.x1 < jigW - 1e-6) j.push({ axis: "x", at: s.x1, role: "male", span0: s.y0, span1: s.y1 });
   if (s.y0 > 1e-6) j.push({ axis: "y", at: s.y0, role: "female", span0: s.x0, span1: s.x1 });
@@ -249,19 +263,77 @@ function jointsOf(
   return j;
 }
 
+const DOWEL_CLEAR = SPLIT_HOLE_DIA / 2 + 0.6;
+const DOWEL_MIN_SEP = SPLIT_HOLE_DIA + 8;
+
+function jointBlocked(j: Joint, span: number, pockets: MeshPocket[]): boolean {
+  const xy: Pt = j.axis === "x" ? [j.at, span] : [span, j.at];
+  return pocketContains(pockets, xy[0], xy[1], DOWEL_CLEAR);
+}
+
+/**
+ * Prefer the even `dowelCenters` layout. If a site hits a pocket (typical on the
+ * plate mid-line Y cut), slide it along the cut into the nearest clear gap so
+ * every seam still gets matching pin/hole + overlap.
+ */
+export function placeSpansForJoint(
+  span0: number,
+  span1: number,
+  blocked: (span: number) => boolean,
+): number[] {
+  const preferred = dowelCenters(span0, span1);
+  if (!preferred.length) return [];
+  const { lo, hi } = spanWindow(span0, span1);
+  const inWin = (u: number) => u >= lo - 1e-9 && u <= hi + 1e-9;
+  const ok = (u: number, occupied: number[]) =>
+    inWin(u) && !blocked(u) && occupied.every((o) => Math.abs(o - u) >= DOWEL_MIN_SEP);
+
+  const nearest = (span: number, occupied: number[]): number | null => {
+    if (ok(span, occupied)) return span;
+    const maxD = Math.max(span - lo, hi - span, 0);
+    for (let d = 0.5; d <= maxD + 1e-9; d += 0.5) {
+      if (ok(span - d, occupied)) return span - d;
+      if (ok(span + d, occupied)) return span + d;
+    }
+    return null;
+  };
+
+  const placed: number[] = [];
+  for (const c of preferred) {
+    const u = nearest(c, placed);
+    if (u != null) placed.push(u);
+  }
+  if (placed.length < preferred.length) {
+    for (let u = lo; u <= hi + 1e-9 && placed.length < preferred.length; u += 0.5) {
+      if (ok(u, placed)) placed.push(u);
+    }
+  }
+  return placed.sort((a, b) => a - b);
+}
+
 export function dowelSitesFor(s: PlateSplit, result: JigResult): DowelSite[] {
   const z = result.solidH / 2;
   if (result.solidH < SPLIT_DOWEL_DIA + 0.4) return [];
   const sites: DowelSite[] = [];
-  const rClear = SPLIT_HOLE_DIA / 2 + 0.6;
   for (const j of jointsOf(s, result.jig.w, result.jig.h)) {
-    for (const span of dowelCenters(j.span0, j.span1)) {
-      const xy: Pt = j.axis === "x" ? [j.at, span] : [span, j.at];
-      if (pocketContains(result.meshPockets, xy[0], xy[1], rClear)) continue;
-      sites.push({ axis: j.axis, at: j.at, span, z, role: j.role });
-    }
+    const spans = placeSpansForJoint(j.span0, j.span1, (span) => jointBlocked(j, span, result.meshPockets));
+    for (const span of spans) sites.push({ axis: j.axis, at: j.at, span, z, role: j.role });
   }
   return sites;
+}
+
+/** Interior cut planes for a split grid (both X and Y when 2×2). */
+export function splitSeamMarks(splits: PlateSplit[]): Array<{ axis: "x" | "y"; at: number }> {
+  const xs = new Set<number>();
+  const ys = new Set<number>();
+  for (const s of splits) {
+    if (s.nx > 1 && s.ix > 0) xs.add(s.x0);
+    if (s.ny > 1 && s.iy > 0) ys.add(s.y0);
+  }
+  return [...xs]
+    .sort((a, b) => a - b)
+    .map((at) => ({ axis: "x" as const, at }))
+    .concat([...ys].sort((a, b) => a - b).map((at) => ({ axis: "y" as const, at })));
 }
 
 function attachConnectors(mesh: Tri[], s: PlateSplit, result: JigResult): Tri[] {

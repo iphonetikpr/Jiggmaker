@@ -1,6 +1,6 @@
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
-import { SPLIT_OVERLAP } from "../constants";
+import { SPLIT_DOWEL_DIA, SPLIT_HOLE_DIA, SPLIT_OVERLAP } from "../constants";
 import {
   buildSplitZip,
   laserFiles,
@@ -13,8 +13,8 @@ import { generateJig } from "./generate";
 import { pointInPoly } from "./geom";
 import { defaultSettings, newObject } from "./history";
 import { meshBBox, meshNonManifoldEdges } from "./mesh";
-import { buildSplitMeshes, dowelSitesFor } from "./split";
-import type { JobSettings } from "../types";
+import { buildSplitMeshes, dowelCenters, dowelSitesFor, placeSpansForJoint, splitSeamMarks } from "./split";
+import type { JobSettings, PlateSplit, Tri } from "../types";
 
 function job(patch: Partial<JobSettings> = {}) {
   const settings: JobSettings = { ...defaultSettings(), scaleComp: false, ...patch };
@@ -25,6 +25,51 @@ function job(patch: Partial<JobSettings> = {}) {
   obj.rectH = 20;
   obj.mode = "rectangle";
   return generateJig([obj], {}, settings, {});
+}
+
+function filledLargeJob(count = 12) {
+  const settings: JobSettings = {
+    ...defaultSettings(),
+    scaleComp: false,
+    bed: "333x418",
+    splitPlate: true,
+    maxPrintBed: 250,
+  };
+  const obj = newObject(0);
+  obj.name = "coin";
+  obj.count = count;
+  obj.rectW = 50;
+  obj.rectH = 30;
+  obj.mode = "rectangle";
+  return generateJig([obj], {}, settings, {});
+}
+
+function adjacentPairs(splits: PlateSplit[], axis: "x" | "y"): Array<{ male: PlateSplit; female: PlateSplit }> {
+  const out: Array<{ male: PlateSplit; female: PlateSplit }> = [];
+  for (const male of splits) {
+    const female =
+      axis === "x"
+        ? splits.find((s) => s.iy === male.iy && s.ix === male.ix + 1)
+        : splits.find((s) => s.ix === male.ix && s.iy === male.iy + 1);
+    if (female) out.push({ male, female });
+  }
+  return out;
+}
+
+/** Mean radius of circle verts on a cut-normal plane around (span, z). */
+function meanRadius(mesh: Tri[], axis: "x" | "y", at: number, span: number, z: number): number {
+  const ai = axis === "x" ? 0 : 1;
+  const si = axis === "x" ? 1 : 0;
+  const rs: number[] = [];
+  for (const t of mesh) {
+    for (let k = 0; k < 9; k += 3) {
+      if (Math.abs(t[k + ai] - at) > 0.08) continue;
+      const d = Math.hypot(t[k + si] - span, t[k + 2] - z);
+      if (d > 0.8 && d < 2.1) rs.push(d);
+    }
+  }
+  expect(rs.length).toBeGreaterThan(8);
+  return rs.reduce((a, b) => a + b, 0) / rs.length;
 }
 
 describe("PLA plate split", () => {
@@ -64,6 +109,8 @@ describe("PLA plate split", () => {
     expect(r.splits.length).toBeGreaterThanOrEqual(2);
     expect(r.splits.every((s) => s.nx >= 2)).toBe(true);
     expect(r.splits.every((s) => s.y0 === 0 && s.y1 === 88)).toBe(true);
+    expect(splitSeamMarks(r.splits).every((m) => m.axis === "x")).toBe(true);
+    expect(splitSeamMarks(r.splits).some((m) => m.axis === "y")).toBe(false);
     const pieces = buildSplitMeshes(r);
     for (const p of pieces) {
       const b = meshBBox(p.mesh);
@@ -112,15 +159,61 @@ describe("PLA plate split", () => {
     expect(b.maxX).toBeGreaterThan(left.x1 + SPLIT_OVERLAP - 0.05);
   });
 
+  it("relocates blocked dowel centers along the cut instead of dropping the seam", () => {
+    const preferred = dowelCenters(0, 166.5);
+    expect(preferred.length).toBeGreaterThanOrEqual(2);
+    const blocked = (u: number) => preferred.some((p) => Math.abs(u - p) < 6);
+    const placed = placeSpansForJoint(0, 166.5, blocked);
+    expect(placed.length).toBe(preferred.length);
+    for (const u of placed) expect(blocked(u)).toBe(false);
+  });
+
+  it("puts matching pin/hole + overlap on every Y seam of a Large 2×2 grid", () => {
+    const r = filledLargeJob(12);
+    expect(r.splits).toHaveLength(4);
+    expect(r.splits.every((s) => s.nx === 2 && s.ny === 2)).toBe(true);
+    const marks = splitSeamMarks(r.splits);
+    expect(marks.some((m) => m.axis === "x")).toBe(true);
+    expect(marks.some((m) => m.axis === "y" && Math.abs(m.at - r.jig.h / 2) < 1)).toBe(true);
+
+    const pieces = buildSplitMeshes(r);
+    for (const pair of adjacentPairs(r.splits, "y")) {
+      const male = dowelSitesFor(pair.male, r).filter((d) => d.axis === "y" && d.role === "male");
+      const female = dowelSitesFor(pair.female, r).filter((d) => d.axis === "y" && d.role === "female");
+      expect(male.length).toBeGreaterThanOrEqual(2);
+      expect(female.map((d) => d.span.toFixed(3))).toEqual(male.map((d) => d.span.toFixed(3)));
+      expect(male[0].at).toBeCloseTo(female[0].at, 6);
+      expect(male[0].z).toBeCloseTo(r.solidH / 2, 6);
+
+      const maleMesh = pieces.find((p) => p.split.label === pair.male.label)!.mesh;
+      const femaleMesh = pieces.find((p) => p.split.label === pair.female.label)!.mesh;
+      expect(meshBBox(maleMesh).maxY).toBeGreaterThan(pair.male.y1 + SPLIT_OVERLAP - 0.05);
+      const pinR = meanRadius(maleMesh, "y", pair.male.y1 + SPLIT_OVERLAP, male[0].span, male[0].z);
+      const holeR = meanRadius(femaleMesh, "y", pair.female.y0, female[0].span, female[0].z);
+      expect(pinR).toBeCloseTo(SPLIT_DOWEL_DIA / 2, 2);
+      expect(holeR).toBeGreaterThanOrEqual(3.2 / 2);
+      expect(holeR).toBeLessThanOrEqual(3.3 / 2);
+    }
+    for (const pair of adjacentPairs(r.splits, "x")) {
+      const male = dowelSitesFor(pair.male, r).filter((d) => d.axis === "x" && d.role === "male");
+      const female = dowelSitesFor(pair.female, r).filter((d) => d.axis === "x" && d.role === "female");
+      expect(male.length).toBeGreaterThanOrEqual(1);
+      expect(female.map((d) => d.span.toFixed(3))).toEqual(male.map((d) => d.span.toFixed(3)));
+      const maleMesh = pieces.find((p) => p.split.label === pair.male.label)!.mesh;
+      expect(meshBBox(maleMesh).maxX).toBeGreaterThan(pair.male.x1 + SPLIT_OVERLAP - 0.05);
+    }
+  });
+
   it("does not place dowels through pockets", () => {
-    const r = job({ bed: "333x88", splitPlate: true });
-    for (const s of r.splits) {
-      for (const d of dowelSitesFor(s, r)) {
-        const x = d.axis === "x" ? d.at : d.span;
-        const y = d.axis === "x" ? d.span : d.at;
-        for (const p of r.meshPockets) {
-          for (const loop of p.loops) {
-            expect(pointInPoly([x, y], loop)).toBe(false);
+    for (const r of [job({ bed: "333x88", splitPlate: true }), filledLargeJob(12)]) {
+      for (const s of r.splits) {
+        for (const d of dowelSitesFor(s, r)) {
+          const x = d.axis === "x" ? d.at : d.span;
+          const y = d.axis === "x" ? d.span : d.at;
+          for (const p of r.meshPockets) {
+            for (const loop of p.loops) {
+              expect(pointInPoly([x, y], loop)).toBe(false);
+            }
           }
         }
       }

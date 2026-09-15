@@ -4,7 +4,8 @@ import type { Entity, JigResult, PreviewMode } from "../types";
 import bedMiniSvg from "../assets/bed-mini.svg?raw";
 import bedStdSvg from "../assets/bed-std.svg?raw";
 import { piecePose } from "../cad/pose";
-import { jigOrbitCamera } from "./partView";
+import { splitSeamMarks } from "../cad/split";
+import { jigOrbitCamera, orbitProject } from "./partView";
 import {
   JIG_MESH_BG,
   VIEWCUBE,
@@ -198,11 +199,65 @@ function drawMesh(
   const cam = jigOrbitCamera(result.jig.w, result.jig.h, result.solidH, tris, sample.w, sample.h, zoom);
   const frame = renderJigMesh(tris, cam, az, ax, sample.w, sample.h, hexToRgb(color), JIG_MESH_BG);
   blitFrame(ctx, off, frame.data, frame.w, frame.h, W, H);
+  if (result.splits.length) {
+    const overlay = jigOrbitCamera(result.jig.w, result.jig.h, result.solidH, tris, W, H, zoom);
+    drawSplitSeams(ctx, result, overlay, az, ax, W, H);
+  }
   ctx.fillStyle = "#b9b9c2";
   ctx.font = "11px sans-serif";
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.fillText(jigHudCaption(tris.length, result.jig.w, result.jig.h, result.solidH), 12, H - 12);
+}
+
+function drawSplitSeams(
+  ctx: CanvasRenderingContext2D,
+  result: JigResult,
+  cam: { cx: number; cy: number; cz: number; sc: number },
+  az: number,
+  ax: number,
+  W: number,
+  H: number,
+) {
+  const marks = splitSeamMarks(result.splits);
+  if (!marks.length) return;
+  const xf = result.meshXform;
+  const z0 = 0;
+  const z1 = result.solidH * xf.s;
+  const map = (x: number, y: number, z: number): [number, number, number] => [
+    xf.cx + (x - xf.cx) * xf.s,
+    xf.cy + (y - xf.cy) * xf.s,
+    z,
+  ];
+  ctx.save();
+  ctx.strokeStyle = "rgba(245, 166, 35, 0.92)";
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([5, 4]);
+  for (const m of marks) {
+    const corners =
+      m.axis === "x"
+        ? [
+            map(m.at, 0, z0),
+            map(m.at, result.jig.h, z0),
+            map(m.at, result.jig.h, z1),
+            map(m.at, 0, z1),
+          ]
+        : [
+            map(0, m.at, z0),
+            map(result.jig.w, m.at, z0),
+            map(result.jig.w, m.at, z1),
+            map(0, m.at, z1),
+          ];
+    ctx.beginPath();
+    corners.forEach((c, i) => {
+      const [px, py] = orbitProject(c[0], c[1], c[2], cam.cx, cam.cy, cam.cz, az, ax, cam.sc, W, H);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.closePath();
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function paintViewCube(canvas: HTMLCanvasElement, az: number, ax: number, dpr: number): ViewCubeLayout {
