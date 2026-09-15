@@ -330,10 +330,10 @@ export function splitSeamMarks(splits: PlateSplit[]): Array<{ axis: "x" | "y"; a
     if (s.nx > 1 && s.ix > 0) xs.add(s.x0);
     if (s.ny > 1 && s.iy > 0) ys.add(s.y0);
   }
-  return [...xs]
-    .sort((a, b) => a - b)
-    .map((at) => ({ axis: "x" as const, at }))
-    .concat([...ys].sort((a, b) => a - b).map((at) => ({ axis: "y" as const, at })));
+  const marks: Array<{ axis: "x" | "y"; at: number }> = [];
+  for (const at of [...xs].sort((a, b) => a - b)) marks.push({ axis: "x", at });
+  for (const at of [...ys].sort((a, b) => a - b)) marks.push({ axis: "y", at });
+  return marks;
 }
 
 function attachConnectors(mesh: Tri[], s: PlateSplit, result: JigResult): Tri[] {
