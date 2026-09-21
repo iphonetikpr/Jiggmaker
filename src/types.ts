@@ -1,6 +1,7 @@
 export type BedId = "333x88" | "333x418" | "custom";
 export type Footprint = "bed" | "tight";
 export type PocketMode = "silhouette" | "rectangle";
+export type PaintSafeMode = "inset" | "fixed";
 export type UpAxis = "z+" | "z-" | "y+" | "y-" | "x+" | "x-";
 export type HolesMode = "none" | "template" | "jig" | "all";
 export type StepId = "setup" | "layout" | "output";
@@ -39,6 +40,12 @@ export interface JobSettings {
   scaleComp: boolean;
   maxPrintBed: number;
   splitPlate: boolean;
+  /** Off by default. Template/Contours GUIDE only — never CUT/POCKET or STL. */
+  paintSafe: boolean;
+  paintSafeMode: PaintSafeMode;
+  paintSafeInset: number;
+  paintSafeW: number;
+  paintSafeH: number;
 }
 
 export interface JobObject {
@@ -97,6 +104,8 @@ export interface Entity {
   fill?: string;
   strokeWidth?: number;
   rings?: Loop[];
+  /** Dash lengths in mm (SVG user units). Paint-safe GUIDE uses this. */
+  dash?: number[];
 }
 
 export interface PreparedObject {
@@ -130,6 +139,8 @@ export interface PlacedPiece {
   art: Loop[];
   artHoles: Loop[];
   hmode: HolesMode;
+  /** Inner paint-safe GUIDE loops (empty when the toggle is off). */
+  paintSafe: Loop[];
 }
 
 export interface BedSize {

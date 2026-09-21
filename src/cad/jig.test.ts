@@ -35,6 +35,9 @@ describe("locked constants", () => {
     expect(DEFAULTS.clearance).toBe(0.15);
     expect(DEFAULTS.maxPrintBed).toBe(250);
     expect(DEFAULTS.qty).toBe(1);
+    expect(DEFAULTS.paintSafeInset).toBe(2.5);
+    expect(DEFAULTS.paintSafeW).toBe(13);
+    expect(DEFAULTS.paintSafeH).toBe(13);
     expect(HISTORY_KEY).toBe("eufyJig.history.v1");
     expect(SPLIT_DOWEL_DIA).toBe(3.0);
     expect(SPLIT_HOLE_DIA).toBe(3.25);
@@ -48,6 +51,7 @@ describe("locked constants", () => {
     expect(newObject(1).count).toBe(1);
     const fresh = generateJig([newObject(0)], {}, defaultSettings(), {});
     expect(fresh.totalUnits).toBe(1);
+    expect(defaultSettings().paintSafe).toBe(false);
   });
 });
 
