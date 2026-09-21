@@ -29,7 +29,15 @@ export const DEFAULTS = {
   rectW: 50,
   rectH: 30,
   qty: 1,
+  /** Per-side inset so an 18 mm pocket yields a ~13 mm paint face. */
+  paintSafeInset: 2.5,
+  paintSafeW: 13,
+  paintSafeH: 13,
 } as const;
+
+/** Template/Contours paint-safe GUIDE stroke — CSS `--ok`, not CUT red. */
+export const PAINT_SAFE_COLOR = "#22C55E";
+export const PAINT_SAFE_DASH = [1.6, 1] as const;
 
 export const HISTORY_KEY = "eufyJig.history.v1";
 export const HISTORY_FILENAME = "eufyMake_jig_history.json";
@@ -65,6 +73,7 @@ export const HISTORY_EXTRA_FIELDS = [
   "scaleComp",
   "maxPrintBed",
   "splitPlate",
+  "paintSafe",
 ] as const;
 
 export const OBJECT_COLORS = ["#3DDC97", "#5B8DEF", "#F5A623"] as const;

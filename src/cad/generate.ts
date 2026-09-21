@@ -4,6 +4,7 @@ import { bboxOf, rectLoop, roundedRectLoop, translateLoop } from "./geom";
 import { applyMoves, packObjects, shiftPiece } from "./layout";
 import { extrudePlate, plateMeshXform, solidHeight } from "./mesh";
 import { bedFromSettings, plateLabel } from "./filename";
+import { paintSafeGuideEntity, paintSafeLoops, templateOuterLoops } from "./paintSafe";
 import { prepareObject } from "./prepare";
 import { planPlateSplits } from "./split";
 
@@ -100,11 +101,15 @@ export function generateJig(
     }
   }
 
+  for (const p of placed) {
+    p.paintSafe = paintSafeLoops(templateOuterLoops(p), settings);
+  }
+
   const templateEntities: Entity[] = [
     { layer: "BED", points: rectLoop(bed.w, bed.h), closed: true, strokeWidth: 0.4 },
   ];
   for (const p of placed) {
-    for (const loop of p.art.length ? p.art : p.loops) {
+    for (const loop of templateOuterLoops(p)) {
       templateEntities.push({
         layer: "CUT",
         points: loop,
@@ -112,6 +117,9 @@ export function generateJig(
         strokeWidth: 0.25,
         color: p.color,
       });
+    }
+    for (const loop of p.paintSafe) {
+      templateEntities.push(paintSafeGuideEntity(loop));
     }
     if (p.hmode === "template" || p.hmode === "all") {
       for (const loop of p.artHoles.length ? p.artHoles : p.holes) {

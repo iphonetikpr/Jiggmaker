@@ -27,7 +27,9 @@ export function renderTemplatePng(
       ctx.arc(sx(e.cx), sy(e.cy), px(e.r), 0, Math.PI * 2);
       ctx.strokeStyle = color;
       ctx.lineWidth = Math.max(1, px(e.strokeWidth || 0.2));
+      if (e.dash?.length) ctx.setLineDash(e.dash.map(px));
       ctx.stroke();
+      ctx.setLineDash([]);
       continue;
     }
     if (e.type === "text") {
@@ -47,7 +49,9 @@ export function renderTemplatePng(
     if (e.closed) ctx.closePath();
     ctx.strokeStyle = color;
     ctx.lineWidth = Math.max(1, px(e.strokeWidth || 0.2));
+    if (e.dash?.length) ctx.setLineDash(e.dash.map(px));
     ctx.stroke();
+    ctx.setLineDash([]);
   }
   return new Promise((resolve, reject) => {
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("png"))), "image/png");

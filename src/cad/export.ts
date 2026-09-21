@@ -3,6 +3,7 @@ import type { Entity, JigResult } from "../types";
 import { toDXF } from "./dxf";
 import { exportBasename } from "./filename";
 import { toAsciiSTL, toBinarySTL } from "./mesh";
+import { paintSafeGuideEntity, templateOuterLoops } from "./paintSafe";
 import { buildSplitMeshes } from "./split";
 import { toSVG } from "./svg";
 
@@ -123,7 +124,7 @@ export function templateSvg(result: JigResult, stem: string): ExportFile {
 export function contoursSvg(result: JigResult, stem: string): ExportFile {
   const ents: Entity[] = [];
   for (const p of result.placed) {
-    const rings = p.art.length ? p.art : p.loops;
+    const rings = templateOuterLoops(p);
     ents.push({
       layer: "CUT",
       rings,
@@ -131,6 +132,9 @@ export function contoursSvg(result: JigResult, stem: string): ExportFile {
       color: "#000000",
       strokeWidth: 0.05,
     });
+    for (const loop of p.paintSafe || []) {
+      ents.push({ ...paintSafeGuideEntity(loop), fill: "none" });
+    }
   }
   return {
     name: `${stem}_CONTOURS.svg`,

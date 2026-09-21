@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { LAYER_SVG } from "../constants";
+import { LAYER_SVG, PAINT_SAFE_COLOR, PAINT_SAFE_DASH } from "../constants";
 import type { Entity, JigResult, PreviewMode } from "../types";
 import bedMiniSvg from "../assets/bed-mini.svg?raw";
 import bedStdSvg from "../assets/bed-std.svg?raw";
@@ -60,7 +60,9 @@ function drawEntities(
       ctx.arc(X(e.cx), Y(e.cy), e.r * sc, 0, Math.PI * 2);
       ctx.strokeStyle = col;
       ctx.lineWidth = Math.max(1, (e.strokeWidth || 0.25) * sc);
+      if (e.dash?.length) ctx.setLineDash(e.dash.map((d) => Math.max(1, d * sc)));
       ctx.stroke();
+      ctx.setLineDash([]);
       continue;
     }
     if (e.type === "text") {
@@ -80,7 +82,9 @@ function drawEntities(
     if (e.closed) ctx.closePath();
     ctx.strokeStyle = col;
     ctx.lineWidth = Math.max(1, (e.strokeWidth || 0.2) * sc);
+    if (e.dash?.length) ctx.setLineDash(e.dash.map((d) => Math.max(1, d * sc)));
     ctx.stroke();
+    ctx.setLineDash([]);
   }
 }
 
@@ -128,6 +132,15 @@ function drawSilhouettes(
         ctx.lineWidth = Math.max(1.1, 0.22 * sc);
         ctx.stroke();
       }
+    }
+    for (const loop of p.paintSafe || []) {
+      if (!strokeLoop(ctx, loop, X, Y)) continue;
+      ctx.save();
+      ctx.strokeStyle = PAINT_SAFE_COLOR;
+      ctx.lineWidth = Math.max(1.2, 0.25 * sc);
+      ctx.setLineDash(PAINT_SAFE_DASH.map((d) => Math.max(1.5, d * sc)));
+      ctx.stroke();
+      ctx.restore();
     }
     for (const loop of pose.holes) {
       if (!strokeLoop(ctx, loop, X, Y)) continue;

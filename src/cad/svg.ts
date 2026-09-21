@@ -29,25 +29,33 @@ export function toSVG(
   if (bg !== "none") {
     o += `<rect x="0" y="0" width="${round3(w)}" height="${round3(h)}" fill="${bg}"/>\n`;
   }
+  let namedGuide = false;
   for (const e of entities) {
     const color = e.color || LAYER_SVG[(e.layer || "").toUpperCase()] || "#000000";
     const sw = e.strokeWidth != null ? e.strokeWidth : 0.1;
+    const layer = (e.layer || "").toUpperCase();
+    const dash = e.dash?.length ? ` stroke-dasharray="${e.dash.map(round3).join(" ")}"` : "";
+    const paintSafe = layer === "GUIDE" && !!e.dash?.length;
+    const idAttr = paintSafe && !namedGuide ? ` id="GUIDE"` : "";
+    if (paintSafe && !namedGuide) namedGuide = true;
+    const layerAttr = layer ? ` data-layer="${esc(layer)}"` : "";
+    const extra = `${dash}${layerAttr}${idAttr}`;
     if (e.type === "circle" && e.cx != null && e.cy != null && e.r != null) {
-      o += `<circle cx="${round3(e.cx)}" cy="${round3(h - e.cy)}" r="${round3(e.r)}" fill="none" stroke="${color}" stroke-width="${sw}"/>\n`;
+      o += `<circle cx="${round3(e.cx)}" cy="${round3(h - e.cy)}" r="${round3(e.r)}" fill="none" stroke="${color}" stroke-width="${sw}"${extra}/>\n`;
       continue;
     }
     if (e.type === "text" && e.text != null && e.x != null && e.y != null) {
-      o += `<text x="${round3(e.x)}" y="${round3(h - e.y)}" font-size="${e.size || 4}" fill="${color}" text-anchor="middle" font-family="sans-serif">${esc(e.text)}</text>\n`;
+      o += `<text x="${round3(e.x)}" y="${round3(h - e.y)}" font-size="${e.size || 4}" fill="${color}" text-anchor="middle" font-family="sans-serif"${layerAttr}>${esc(e.text)}</text>\n`;
       continue;
     }
     if (e.rings) {
       let d = "";
       for (const ring of e.rings) d += pathD(ring, h, true) + " ";
-      o += `<path d="${d.trim()}" fill="${e.fill || "none"}" fill-rule="evenodd" stroke="${color}" stroke-width="${sw}"/>\n`;
+      o += `<path d="${d.trim()}" fill="${e.fill || "none"}" fill-rule="evenodd" stroke="${color}" stroke-width="${sw}"${extra}/>\n`;
       continue;
     }
     if (e.points) {
-      o += `<path d="${pathD(e.points, h, e.closed)}" fill="${e.fill || "none"}" stroke="${color}" stroke-width="${sw}"/>\n`;
+      o += `<path d="${pathD(e.points, h, e.closed)}" fill="${e.fill || "none"}" stroke="${color}" stroke-width="${sw}"${extra}/>\n`;
     }
   }
   o += `</svg>\n`;

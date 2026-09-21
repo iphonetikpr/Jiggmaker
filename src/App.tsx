@@ -27,6 +27,7 @@ import { parseSTL } from "./cad/stl";
 import type { HistoryJob, JobObject, JobSettings, PreviewMode, StepId } from "./types";
 import { NumberField } from "./ui/NumberField";
 import { ObjectCard } from "./ui/ObjectCard";
+import { PaintSafeFields } from "./ui/PaintSafeFields";
 import { PartViewport } from "./ui/PartViewport";
 import { Preview } from "./ui/Preview";
 import { SummaryCard } from "./ui/SummaryCard";
@@ -327,6 +328,7 @@ export default function App() {
                 <input type="checkbox" checked={settings.center} onChange={(e) => patchSettings({ center: e.target.checked })} />
                 Centrar array en la cama
               </label>
+              <PaintSafeFields settings={settings} onChange={patchSettings} />
             </section>
           )}
 
@@ -389,6 +391,7 @@ export default function App() {
                   <input type="checkbox" checked={settings.showNum} onChange={(e) => patchSettings({ showNum: e.target.checked })} />
                   Numerar posiciones
                 </label>
+                <PaintSafeFields settings={settings} onChange={patchSettings} />
               </section>
               <section className="card">
                 <h2>Jobs guardados</h2>
@@ -541,6 +544,12 @@ export default function App() {
                   <i style={{ borderColor: "var(--bed)" }} />
                   bed edge
                 </span>
+                {settings.paintSafe && (
+                  <span>
+                    <i className="dash" style={{ borderColor: "var(--ok)" }} />
+                    paint-safe
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -638,7 +647,7 @@ export default function App() {
                 }}
               >
                 <b>Template SVG</b>
-                <span>cama completa</span>
+                <span>{settings.paintSafe ? "cama · GUIDE paint-safe" : "cama completa"}</span>
               </button>
               <button
                 type="button"
@@ -648,7 +657,7 @@ export default function App() {
                 }}
               >
                 <b>Contours SVG</b>
-                <span>auto-detect</span>
+                <span>{settings.paintSafe ? "CUT outer · GUIDE inner" : "auto-detect"}</span>
               </button>
             </div>
           </div>
@@ -688,7 +697,9 @@ export default function App() {
             </p>
             <p>
               Importa la plantilla en eufyMake Studio a tamaño de cama, coloca el arte en los contornos, oculta la
-              plantilla y usa Zero Point Alignment. El 0,0 de la plantilla es la esquina de registro.
+              plantilla y usa Zero Point Alignment. El 0,0 de la plantilla es la esquina de registro. Opcional: activa
+              <b> guía paint-safe</b> (Layout / Output) para un contorno interior GUIDE — p.ej. keycap pocket 18×18 con
+              zona de arte 13×13. No corta; el STL no cambia.
             </p>
             <p>
               <b>Jobs.</b> Se guardan en este navegador (<code>eufyJig.history.v1</code>), igual en Docker y en GitHub

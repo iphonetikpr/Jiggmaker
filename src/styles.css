@@ -687,6 +687,10 @@ select {
   vertical-align: middle;
 }
 
+.legend i.dash {
+  border-top-style: dashed;
+}
+
 .dlgrid {
   display: grid;
   grid-template-columns: 1fr 1fr;

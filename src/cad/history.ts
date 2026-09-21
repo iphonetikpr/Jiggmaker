@@ -32,6 +32,11 @@ export function defaultSettings(): JobSettings {
     scaleComp: true,
     maxPrintBed: DEFAULTS.maxPrintBed,
     splitPlate: false,
+    paintSafe: false,
+    paintSafeMode: "inset",
+    paintSafeInset: DEFAULTS.paintSafeInset,
+    paintSafeW: DEFAULTS.paintSafeW,
+    paintSafeH: DEFAULTS.paintSafeH,
   };
 }
 
@@ -83,6 +88,11 @@ export function serializeJob(
   rec.scaleComp = settings.scaleComp;
   rec.maxPrintBed = settings.maxPrintBed;
   rec.splitPlate = settings.splitPlate;
+  rec.paintSafe = settings.paintSafe;
+  rec.paintSafeMode = settings.paintSafeMode;
+  rec.paintSafeInset = settings.paintSafeInset;
+  rec.paintSafeW = settings.paintSafeW;
+  rec.paintSafeH = settings.paintSafeH;
 
   return {
     id: "h" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
@@ -127,6 +137,9 @@ export function applyHistorySettings(raw: Record<string, unknown> | HistoryJob["
     "pocketDepth",
     "dpi",
     "maxPrintBed",
+    "paintSafeInset",
+    "paintSafeW",
+    "paintSafeH",
   ]);
   const boolKeys = new Set<string>([
     ...HISTORY_CHECK_FIELDS,
@@ -136,6 +149,7 @@ export function applyHistorySettings(raw: Record<string, unknown> | HistoryJob["
     if (v == null) continue;
     if (k === "bed" && (v === "333x88" || v === "333x418" || v === "custom")) s.bed = v;
     else if (k === "footprint" && (v === "bed" || v === "tight")) s.footprint = v;
+    else if (k === "paintSafeMode" && (v === "inset" || v === "fixed")) s.paintSafeMode = v;
     else if (numKeys.has(k) && k in s) (s as unknown as Record<string, number>)[k] = typeof v === "number" ? v : parseFloat(String(v));
     else if (boolKeys.has(k) && k in s) {
       (s as unknown as Record<string, boolean>)[k] = v === true || v === "true";

@@ -77,6 +77,7 @@ export function packObjects(
         art: (o.artLoops.length ? o.artLoops : o.loops).map((l) => translateLoop(l, x, y)),
         artHoles: o.artHoles.map((l) => translateLoop(l, x, y)),
         hmode: o.holesMode,
+        paintSafe: [],
       });
     });
     yCursor += band.h;
@@ -104,6 +105,7 @@ export function shiftPiece(p: PlacedPiece, dx: number, dy: number) {
   p.holes = p.holes.map((l) => translateLoop(l, dx, dy));
   p.art = p.art.map((l) => translateLoop(l, dx, dy));
   p.artHoles = p.artHoles.map((l) => translateLoop(l, dx, dy));
+  p.paintSafe = (p.paintSafe || []).map((l) => translateLoop(l, dx, dy));
 }
 
 export function applyMoves(placed: PlacedPiece[], moves: Record<string, [number, number]>, bedW: number, bedH: number) {
