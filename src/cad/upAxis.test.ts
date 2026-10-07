@@ -4,7 +4,7 @@ import { generateJig } from "./generate";
 import { applyHistorySettings, defaultSettings, newObject, serializeJob } from "./history";
 import { meshBBox, meshNonManifoldEdges } from "./mesh";
 import { orientPoint } from "./project";
-import { makeLStl, makeSeatingPlateStl } from "./stl";
+import { makeDraftedPegStl, makeLStl, makeSeatingPlateStl } from "./stl";
 import type { JobSettings, Loop } from "../types";
 import { summaryJigSize } from "../ui/summary";
 
@@ -117,6 +117,38 @@ describe("per-object Z down", () => {
     });
     expect(floorUp).toBe(true);
     expect(meshNonManifoldEdges(zDown.mesh)).toBe(0);
+  });
+
+  it("pockets the widest section inside the seating band, not the contact face", () => {
+    // File is 40×40 at z=0 and 10×10 at z=20. Z down seats the 10×10 face.
+    // At pocket depth 8 mm the drafted section is 22×22. A bottom-only slice
+    // would be ~10 mm and the peg would jam on the way in.
+    const settings: JobSettings = {
+      ...defaultSettings(),
+      bed: "333x418",
+      footprint: "tight",
+      scaleComp: false,
+      center: false,
+      nest: false,
+      pocketDepth: 8,
+      baseThk: 3,
+    };
+    const obj = newObject(0);
+    obj.name = "peg";
+    obj.stlName = "peg";
+    obj.mode = "silhouette";
+    obj.up = "z-";
+    obj.clear = 0;
+    obj.count = 1;
+    const r = generateJig([obj], { [obj.id]: makeDraftedPegStl() }, settings, {});
+    expect(r.meshPockets[0].loops.length).toBe(1);
+    const b = bboxOf(r.meshPockets[0].loops);
+    // 10 + (40-10) * (8/20) = 22 at the top of the band, plus the 0.2 mm/side floor.
+    expect(b.w).toBeGreaterThan(21.5);
+    expect(b.h).toBeGreaterThan(21.5);
+    expect(b.w).toBeLessThan(23.5);
+    expect(b.h).toBeLessThan(23.5);
+    expect(Math.abs(b.w - b.h)).toBeLessThan(0.8);
   });
 
   it("caps jig height under the part and keeps the rib pockets", () => {

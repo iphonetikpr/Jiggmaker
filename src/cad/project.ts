@@ -93,10 +93,13 @@ export function projectStl(mesh: StlMesh, up: UpAxis, rotDeg: number, mirror: bo
 }
 
 /**
- * Keep the portion of the mesh at or below `minZ + depth` (plus a 0.01 mm
- * sliver so a face that lands on the plane is included). XY stays in the
- * oriented part frame; `bbox` stays the full part so later silhouettes share
- * coordinates with the unclipped projection.
+ * Solid inside the seating band: every triangle from the contact plane
+ * (min Z) up through `depth`, clipped on that plane. The XY silhouette of
+ * this mesh is the union of the cross-sections in the band — the widest
+ * outline the part reaches before it is fully seated, not the contact face
+ * alone. A drafted peg that is narrow on the jig and wider 8 mm up must
+ * pocket the wide section or it jams. `bbox` stays the full part so the
+ * outline shares coordinates with the unclipped projection.
  */
 export function clipToDepth(proj: Projected, depth: number): Projected {
   const limit = proj.minZ + depth + 0.01;

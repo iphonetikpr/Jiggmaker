@@ -28,9 +28,11 @@ function inFrame(loops: Loop[], ox: number, oy: number): Loop[] {
 }
 
 /**
- * Pocket loops in the full-part frame. When the bottom `depth` mm is a much
- * smaller shape than the whole projection (feet, ribs), that contact band
- * becomes the pocket and the part bbox stays the layout footprint.
+ * Pocket loops in the full-part frame. The pocket is the union of every
+ * cross-section from the contact face up to the pocket depth (widest outline
+ * in that band). Feet and ribs stay small slots; a section that widens inside
+ * the band enlarges the slot so the part can seat. The part bbox stays the
+ * layout footprint.
  */
 function seatLoops(proj: Projected, mode: JobObject["mode"], clearance: number, pocketDepth: number, baseThk: number) {
   const fullClear = mode === "rectangle" ? inflatedRect(proj.bbox, clearance) : silhouetteLoops(proj, clearance);
