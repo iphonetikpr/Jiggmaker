@@ -18,6 +18,8 @@ export const DEFAULTS = {
   matThk: 3,
   dpi: 300,
   clearance: 0.15,
+  /** Per-side clearance floor for narrow contact slots (thin PLA prints closed below this). */
+  slotClearance: 0.2,
   spacingX: 5,
   spacingY: 5,
   marginX: 2,
@@ -74,7 +76,6 @@ export const HISTORY_EXTRA_FIELDS = [
   "maxPrintBed",
   "splitPlate",
   "paintSafe",
-  "zDownFlip",
 ] as const;
 
 export const OBJECT_COLORS = ["#3DDC97", "#5B8DEF", "#F5A623"] as const;
@@ -103,23 +104,6 @@ export const LAYER_ACI: Record<string, number> = {
 
 export const MAX_OBJECTS = 3;
 export const PRINT_TARGET = 250;
-
-/**
- * 45° pocket-mouth chamfer (mm), only when Z-down flip puts the mouth on the bed.
- * The opening grows by this much per side over the same vertical distance.
- * Do not also offset for elephant foot — slicers already apply ~0.15 mm, and
- * stacking both makes an 18×18 pocket oversize.
- */
-export const POCKET_MOUTH_CHAMFER = 0.4;
-/** Used when the wall between pockets is thinner than POCKET_MOUTH_THIN_WALL. */
-export const POCKET_MOUTH_CHAMFER_THIN = 0.3;
-/** Inter-pocket wall (mm) below which the thin-wall chamfer is used. */
-export const POCKET_MOUTH_THIN_WALL = 1.2;
-
-/** Engraved origin L (mm) on the face that ends up on top after a Z-down flip. */
-export const ORIGIN_MARK_LEG = 16;
-export const ORIGIN_MARK_WIDTH = 4;
-export const ORIGIN_MARK_DEPTH = 2;
 
 /** PLA split joints (Hand Solo): dowels on the cut face, not through pockets. */
 export const SPLIT_OVERLAP = 2.5;

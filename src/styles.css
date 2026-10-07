@@ -325,9 +325,17 @@ select {
   margin-top: 8px;
 }
 
-.orient-actions .zdown-toggle {
-  margin: 0;
-  font-size: 13px;
+.seats-tag {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  color: var(--text);
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  pointer-events: none;
 }
 
 .sum-pills {

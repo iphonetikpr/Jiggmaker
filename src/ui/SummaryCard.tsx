@@ -1,5 +1,5 @@
 import type { JigResult } from "../types";
-import { summaryBedLine, summaryJigSize, summaryPlateHint, summaryZDownPill, truncateName } from "./summary";
+import { summaryBedLine, summaryJigSize, summaryPlateHint, truncateName } from "./summary";
 
 export function SummaryCard({ result }: { result: JigResult }) {
   const hint = summaryPlateHint(result);
@@ -13,7 +13,6 @@ export function SummaryCard({ result }: { result: JigResult }) {
           <div className="sum-bed">{summaryBedLine(result)}</div>
         </div>
         <div className="sum-pills">
-          {summaryZDownPill(result) && <span className="pill ok-pill">Z-down</span>}
           <span className={result.fits ? "pill ok-pill" : "pill warn-pill"}>{result.fits ? "fits" : "no cabe"}</span>
         </div>
       </div>

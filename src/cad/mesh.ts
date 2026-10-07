@@ -1,8 +1,7 @@
 import earcut from "earcut";
-import { ORIGIN_MARK_DEPTH, POCKET_DEPTH_EXTRA, SCALE_COMP } from "../constants";
+import { POCKET_DEPTH_EXTRA, SCALE_COMP } from "../constants";
 import type { Loop, MeshPocket, Tri } from "../types";
-import { circleLoop, cleanLoop, ensureCCW, ensureCW, offsetLoop, pointInPoly, polyArea } from "./geom";
-import { mouthChamferMm, zDownFlipMap, type AxisBox } from "./zDownFlip";
+import { circleLoop, ensureCCW, ensureCW, polyArea } from "./geom";
 
 function flatten(outer: Loop, holes: Loop[]): { vertices: number[]; holeIndices: number[] } {
   const vertices: number[] = [];
@@ -108,21 +107,6 @@ export function applyMeshXform(tris: Tri[], xf: { cx: number; cy: number; s: num
   return tris;
 }
 
-/** Rotate the mesh 180° about Y and seat it so min Z = 0. Mutates `tris`. */
-export function flipJigZDown(tris: Tri[]): Tri[] {
-  const box = meshBBox(tris);
-  const axis: AxisBox = { minX: box.minX, maxX: box.maxX, minZ: box.minZ, maxZ: box.maxZ };
-  for (const t of tris) {
-    for (let i = 0; i < 9; i += 3) {
-      const [x, y, z] = zDownFlipMap(t[i], t[i + 1], t[i + 2], axis);
-      t[i] = x;
-      t[i + 1] = y;
-      t[i + 2] = z;
-    }
-  }
-  return tris;
-}
-
 export function meshBBox(tris: Tri[]): { minX: number; minY: number; minZ: number; maxX: number; maxY: number; maxZ: number } {
   let minX = Infinity,
     minY = Infinity,
@@ -166,136 +150,50 @@ export function meshNonManifoldEdges(tris: Tri[]): number {
   return bad;
 }
 
-export interface PlateMeshOptions {
-  /** 45° chamfer on the pocket mouth (the edge that sits on the bed after Z-down flip). */
-  mouthChamfer?: boolean;
-  /** Engraved origin L on the bottom face, so the flip leaves it on top. */
-  originMark?: Loop | null;
-}
-
-interface MouthWall {
-  nominal: Loop;
-  top: Loop;
-  c: number;
-}
-
-function loopInside(outer: Loop, loop: Loop): boolean {
-  return loop.every((p) => pointInPoly(p, outer));
-}
-
-/** Sloped band from a nominal loop up to a larger mouth. Normals point into the pocket. */
-function chamferBand(out: Tri[], nominal: Loop, zNominal: number, mouth: Loop, zMouth: number) {
-  const n = Math.min(nominal.length, mouth.length);
-  for (let i = 0; i < n; i++) {
-    const a0 = nominal[i];
-    const a1 = nominal[(i + 1) % n];
-    const b0 = mouth[i];
-    const b1 = mouth[(i + 1) % n];
-    pushTri(out, a0[0], a0[1], zNominal, b1[0], b1[1], zMouth, a1[0], a1[1], zNominal);
-    pushTri(out, a0[0], a0[1], zNominal, b0[0], b0[1], zMouth, b1[0], b1[1], zMouth);
-  }
-}
-
-function resolveMouth(loop: Loop, neighbors: Loop[], outer: Loop, wallH: number, chamferOn: boolean): MouthWall {
-  if (!chamferOn) return { nominal: loop, top: loop, c: 0 };
-  const nominal = ensureCCW(cleanLoop(loop, 1e-9));
-  let c = mouthChamferMm(nominal, neighbors, outer, wallH);
-  if (!(c > 0)) return { nominal, top: nominal, c: 0 };
-  const grown = offsetLoop(nominal, c);
-  if (!grown || grown.length !== nominal.length || !loopInside(outer, grown)) {
-    return { nominal, top: nominal, c: 0 };
-  }
-  return { nominal, top: grown, c };
-}
-
 export function extrudePlate(
   outer: Loop,
   pockets: PocketSpec[],
   baseThk: number,
   pocketDepth: number,
   scaleComp: boolean,
-  options?: PlateMeshOptions,
 ): Tri[] {
   const through = baseThk <= 0;
   const extra = through ? 0 : POCKET_DEPTH_EXTRA;
   const topZ = solidHeight(baseThk, pocketDepth);
   const floorZ = through ? 0 : Math.max(0, baseThk - extra);
-  const chamferOn = !!options?.mouthChamfer;
-  const wallH = topZ - (through ? 0 : floorZ);
 
-  const rawLoops: Loop[] = [];
-  for (const p of pockets) {
-    for (const loop of p.loops) {
-      if (loop.length >= 3) rawLoops.push(loop);
-    }
-  }
-  const neighborsOf = new Map<Loop, Loop[]>();
-  if (chamferOn) {
-    const nominals = rawLoops.map((loop) => ensureCCW(cleanLoop(loop, 1e-9)));
-    for (let i = 0; i < nominals.length; i++) {
-      neighborsOf.set(rawLoops[i], nominals.filter((_, j) => j !== i));
-    }
-  }
-
-  const topHoles: Loop[] = [];
-  const mouths: MouthWall[] = [];
+  const inners: Loop[] = [];
   const pickHoles: Loop[] = [];
-  // Earcut drops vertices when two holes share a perfectly colinear edge, which
-  // opens the cap. A 0.001 mm stagger (far below print tolerance) breaks that.
-  let holeIndex = 0;
   for (const p of pockets) {
     for (const loop of p.loops) {
-      if (loop.length < 3) continue;
-      const stagger = chamferOn ? holeIndex * 0.001 : 0;
-      holeIndex++;
-      const placed = stagger
-        ? loop.map(([x, y]) => [x + stagger, y + stagger] as [number, number])
-        : loop;
-      const mouth = resolveMouth(placed, neighborsOf.get(loop) || [], outer, wallH, chamferOn);
-      topHoles.push(mouth.top);
-      mouths.push(mouth);
+      if (loop.length >= 3) inners.push(loop);
     }
     if (p.pick && p.pick.r > 0.2) pickHoles.push(circleLoop(p.pick.cx, p.pick.cy, p.pick.r, 20));
   }
 
-  const mark = options?.originMark && options.originMark.length >= 3 ? options.originMark : null;
-  const markDepth = mark ? Math.min(ORIGIN_MARK_DEPTH, topZ * 0.45) : 0;
-  const useMark = !!mark && markDepth >= 0.3 && loopInside(outer, mark);
-
   const out: Tri[] = [];
   // Always cut pocket openings in the top — a solid lid z-fights and hides
   // pockets when the 3D preview orbits (painter's algorithm + backfaces).
-  cap(out, outer, topHoles, topZ, true);
-  const bottomHoles = through ? mouths.map((m) => m.nominal) : pickHoles.slice();
-  if (useMark && mark) bottomHoles.push(mark);
-  cap(out, outer, bottomHoles, 0, false);
+  cap(out, outer, inners, topZ, true);
+  cap(out, outer, through ? inners : pickHoles, 0, false);
   ringWalls(out, outer, 0, topZ, true);
 
-  let mi = 0;
   for (const p of pockets) {
     const picks = p.pick && p.pick.r > 0.2 ? [circleLoop(p.pick.cx, p.pick.cy, p.pick.r, 20)] : [];
     for (const pocket of p.loops) {
       if (!pocket || pocket.length < 3) continue;
-      const mouth = mouths[mi++];
-      const zChamfer = topZ - mouth.c;
       if (through) {
-        ringWalls(out, mouth.nominal, 0, mouth.c > 0 ? zChamfer : topZ, false);
+        ringWalls(out, pocket, 0, topZ, false);
       } else {
-        cap(out, mouth.nominal, picks, floorZ, true);
-        ringWalls(out, mouth.nominal, floorZ, mouth.c > 0 ? zChamfer : topZ, false);
+        cap(out, pocket, picks, floorZ, true);
+        ringWalls(out, pocket, floorZ, topZ, false);
       }
-      if (mouth.c > 0) chamferBand(out, mouth.nominal, zChamfer, mouth.top, topZ);
     }
     if (!through) {
       for (const hole of picks) {
         ringWalls(out, hole, 0, floorZ, false);
       }
     }
-  }
-
-  if (useMark && mark) {
-    cap(out, mark, [], markDepth, false);
-    ringWalls(out, mark, 0, markDepth, false);
   }
 
   const xf = plateMeshXform(outer, scaleComp);

@@ -1,5 +1,28 @@
 import type { JobSettings, PlacedPiece, PreparedObject } from "../types";
-import { bboxOf, translateLoop } from "./geom";
+import { translateLoop } from "./geom";
+
+/** Layout cell of a placed part (full footprint), not the pocket-loop bbox. */
+export function footprintOf(placed: PlacedPiece[]): {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  w: number;
+  h: number;
+} {
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  for (const p of placed) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x + p.w > maxX) maxX = p.x + p.w;
+    if (p.y + p.h > maxY) maxY = p.y + p.h;
+  }
+  if (!isFinite(minX)) return { minX: 0, minY: 0, maxX: 0, maxY: 0, w: 0, h: 0 };
+  return { minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY };
+}
 
 export interface PackResult {
   placed: PlacedPiece[];
@@ -84,13 +107,13 @@ export function packObjects(
   });
 
   if (settings.center && settings.footprint !== "tight" && placed.length) {
-    const b = bboxOf(placed.flatMap((p) => p.loops));
+    const b = footprintOf(placed);
     const dx = (bedW - b.w) / 2 - b.minX;
     const dy = (bedH - b.h) / 2 - b.minY;
     for (const p of placed) shiftPiece(p, dx, dy);
   }
 
-  const b = placed.length ? bboxOf(placed.flatMap((p) => p.loops)) : { w: 0, h: 0, minX: 0, minY: 0, maxX: 0, maxY: 0 };
+  const b = placed.length ? footprintOf(placed) : { w: 0, h: 0, minX: 0, minY: 0, maxX: 0, maxY: 0 };
   const fits = b.maxX <= bedW - mx + 1e-4 && b.maxY <= bedH - my + 1e-4 && b.minX >= mx - 1e-4 && b.minY >= my - 1e-4;
 
   return { placed, usedW: b.w, usedH: b.h, fits };
@@ -113,11 +136,10 @@ export function applyMoves(placed: PlacedPiece[], moves: Record<string, [number,
     const m = moves[p.label];
     if (!m) continue;
     let [dx, dy] = m;
-    const b = bboxOf(p.loops);
-    if (b.minX + dx < 0) dx = -b.minX;
-    if (b.maxX + dx > bedW) dx = bedW - b.maxX;
-    if (b.minY + dy < 0) dy = -b.minY;
-    if (b.maxY + dy > bedH) dy = bedH - b.maxY;
+    if (p.x + dx < 0) dx = -p.x;
+    if (p.x + p.w + dx > bedW) dx = bedW - (p.x + p.w);
+    if (p.y + dy < 0) dy = -p.y;
+    if (p.y + p.h + dy > bedH) dy = bedH - (p.y + p.h);
     shiftPiece(p, dx, dy);
   }
 }

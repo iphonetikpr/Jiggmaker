@@ -666,8 +666,6 @@ export default function App() {
           <PartViewport
             objects={objects}
             stlMap={stlMap}
-            zDownFlip={settings.zDownFlip}
-            onZDownFlip={(zDownFlip) => patchSettings({ zDownFlip })}
             onChange={(id, p) => setObjects((list) => list.map((x) => (x.id === id ? { ...x, ...p } : x)))}
           />
           <SummaryCard result={result} />

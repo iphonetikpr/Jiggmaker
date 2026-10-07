@@ -29,11 +29,6 @@ export function summaryPlateHint(result: JigResult): string | null {
   return null;
 }
 
-/** Green status pill when the exported jig STL is flipped onto the bed. */
-export function summaryZDownPill(result: { zDownFlip?: boolean }): string | null {
-  return result.zDownFlip ? "Z-down" : null;
-}
-
 export function truncateName(name: string, max = 18): string {
   const s = name.trim() || "objeto";
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;

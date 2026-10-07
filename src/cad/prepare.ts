@@ -1,8 +1,67 @@
-import { OBJECT_COLORS } from "../constants";
-import type { HolesMode, JobObject, PreparedObject, StlMesh } from "../types";
+import { DEFAULTS, OBJECT_COLORS } from "../constants";
+import type { HolesMode, JobObject, Loop, PreparedObject, StlMesh } from "../types";
 import { inflatedRect, originLoops, translateLoop } from "./geom";
-import { projectStl, silhouetteLoops } from "./project";
+import { solidHeight } from "./mesh";
+import { clipToDepth, loopsArea, projectStl, silhouetteLoops, type Projected } from "./project";
 import { parseSTL } from "./stl";
+
+export interface PrepareOpts {
+  pocketDepth: number;
+  baseThk: number;
+}
+
+/**
+ * Keep the extruded jig shorter than the part. A requested pocket that would
+ * bury the part is shortened so solid height stays 0.05 mm under part height.
+ */
+export function effectivePocketDepth(requested: number, baseThk: number, partHeight: number): number {
+  if (!(partHeight > 1) || !(requested > 0)) return requested;
+  if (solidHeight(baseThk, requested) < partHeight - 1e-6) return requested;
+  const base = baseThk > 0 ? baseThk : 0;
+  const capped = partHeight - base - 0.05;
+  if (capped < 0.4) return Math.min(requested, Math.max(0.2, capped));
+  return Math.min(requested, capped);
+}
+
+function inFrame(loops: Loop[], ox: number, oy: number): Loop[] {
+  return loops.map((l) => translateLoop(l, -ox, -oy));
+}
+
+/**
+ * Pocket loops in the full-part frame. When the bottom `depth` mm is a much
+ * smaller shape than the whole projection (feet, ribs), that contact band
+ * becomes the pocket and the part bbox stays the layout footprint.
+ */
+function seatLoops(proj: Projected, mode: JobObject["mode"], clearance: number, pocketDepth: number, baseThk: number) {
+  const fullClear = mode === "rectangle" ? inflatedRect(proj.bbox, clearance) : silhouetteLoops(proj, clearance);
+  const fullArt = mode === "rectangle" ? inflatedRect(proj.bbox, 0) : silhouetteLoops(proj, 0);
+  const fallback = fullClear.length ? fullClear : inflatedRect(proj.bbox, clearance);
+  const centered = originLoops(fallback);
+  const artSrc = fullArt.length ? fullArt : centered.loops;
+  const art = originLoops(artSrc);
+  let loops = centered.loops;
+  let artLoops = art.loops.map((l) => translateLoop(l, art.ox - centered.ox, art.oy - centered.oy));
+
+  const depth = effectivePocketDepth(pocketDepth, baseThk, proj.partHeight);
+  if (mode === "silhouette" && depth > 0 && depth < proj.partHeight - 0.05) {
+    const band = clipToDepth(proj, depth);
+    if (band.tris.length) {
+      const bandArt = silhouetteLoops(band, 0);
+      const fullA = loopsArea(fullArt.length ? fullArt : fallback);
+      const bandA = loopsArea(bandArt);
+      if (bandArt.length && fullA > 0 && bandA < 0.97 * fullA) {
+        const slotClear = Math.max(clearance, DEFAULTS.slotClearance);
+        // A plate-sized grid is coarser than 0.2 mm, which would swallow the clearance.
+        const bandPocket = silhouetteLoops(band, slotClear, slotClear / 2);
+        const pockets = bandPocket.length ? bandPocket : bandArt;
+        loops = inFrame(pockets, centered.ox, centered.oy);
+        artLoops = inFrame(bandArt, centered.ox, centered.oy);
+      }
+    }
+  }
+
+  return { loops, artLoops, centered };
+}
 
 const stlCache = new WeakMap<ArrayBuffer, StlMesh>();
 
@@ -19,6 +78,7 @@ export function prepareObject(
   obj: JobObject,
   stlBytes: ArrayBuffer | null,
   index: number,
+  opts?: PrepareOpts,
 ): PreparedObject {
   const letter = String.fromCharCode(65 + index);
   const color = OBJECT_COLORS[index % OBJECT_COLORS.length];
@@ -43,18 +103,10 @@ export function prepareObject(
       if (best !== obj.rot) proj = projectStl(mesh, obj.up, best, obj.mirror);
     }
 
-    let loops =
-      obj.mode === "rectangle"
-        ? inflatedRect(proj.bbox, clearance)
-        : silhouetteLoops(proj, clearance);
-    if (!loops.length) loops = inflatedRect(proj.bbox, clearance);
-    const centered = originLoops(loops);
-    const artSrc =
-      obj.mode === "rectangle" ? inflatedRect(proj.bbox, 0) : silhouetteLoops(proj, 0);
-    const art = originLoops(artSrc.length ? artSrc : centered.loops);
-    // originLoops pinned both bboxes at (0,0). Shift art by the original origin
-    // delta so it sits inside the pocket (clearance inset), not opposite it.
-    const artLoops = art.loops.map((l) => translateLoop(l, art.ox - centered.ox, art.oy - centered.oy));
+    const seated = seatLoops(proj, obj.mode, clearance, opts?.pocketDepth ?? 4, opts?.baseThk ?? 3);
+    const loops = seated.loops;
+    const centered = seated.centered;
+    const artLoops = seated.artLoops;
 
     return {
       id: obj.id,
@@ -62,7 +114,7 @@ export function prepareObject(
       count: Math.max(1, obj.count | 0),
       letter,
       color,
-      loops: centered.loops,
+      loops,
       holes: [],
       artLoops,
       artHoles: [],

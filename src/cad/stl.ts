@@ -49,13 +49,13 @@ export function parseSTL(buf: ArrayBuffer): StlMesh {
   throw new Error("Unrecognized STL");
 }
 
-export function makeBoxStl(w: number, h: number, d: number): ArrayBuffer {
-  const x0 = 0,
-    y0 = 0,
-    z0 = 0,
-    x1 = w,
-    y1 = h,
-    z1 = d;
+export function makeBoxStl(w: number, h: number, d: number, ox = 0, oy = 0, oz = 0): ArrayBuffer {
+  const x0 = ox,
+    y0 = oy,
+    z0 = oz,
+    x1 = ox + w,
+    y1 = oy + h,
+    z1 = oz + d;
   const faces: Array<[[number, number, number], [number, number, number], [number, number, number]]> = [
     [
       [x0, y0, z0],
@@ -156,6 +156,23 @@ export function makeBoxStl(w: number, h: number, d: number): ArrayBuffer {
 /** L-footprint prism (40×15 bar + 15×30 stem) for silhouette tests. */
 export function makeLStl(d = 8): ArrayBuffer {
   return mergeBinaryStl([makeBoxStl(40, 15, d), makeBoxStl(15, 30, d)]);
+}
+
+/** Plate body on the bottom, six ribs standing on top. Z-down seats on the ribs. */
+export function makeSeatingPlateStl(): ArrayBuffer {
+  const plateW = 139.7;
+  const plateH = 177.8;
+  const slab = 2.5;
+  const total = 26.5;
+  const ribW = 10;
+  const ribD = 16;
+  const boxes = [makeBoxStl(plateW, plateH, slab)];
+  const xs = [18, plateW - 18 - ribW];
+  const ys = [16, (plateH - ribD) / 2, plateH - 16 - ribD];
+  for (const x of xs) {
+    for (const y of ys) boxes.push(makeBoxStl(ribW, ribD, total - slab, x, y, slab));
+  }
+  return mergeBinaryStl(boxes);
 }
 
 function mergeBinaryStl(bufs: ArrayBuffer[]): ArrayBuffer {

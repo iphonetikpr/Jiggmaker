@@ -1,12 +1,11 @@
 import { FRAME_PLATE } from "../constants";
 import type { BedSize, Entity, JobObject, JobSettings, JigResult, Loop, PlacedPiece } from "../types";
-import { bboxOf, rectLoop, roundedRectLoop, translateLoop } from "./geom";
-import { applyMoves, packObjects, shiftPiece } from "./layout";
-import { extrudePlate, flipJigZDown, plateMeshXform, solidHeight } from "./mesh";
-import { fitOriginMark } from "./zDownFlip";
+import { rectLoop, roundedRectLoop, translateLoop } from "./geom";
+import { applyMoves, footprintOf, packObjects, shiftPiece } from "./layout";
+import { extrudePlate, plateMeshXform, solidHeight } from "./mesh";
 import { bedFromSettings, plateLabel } from "./filename";
 import { paintSafeGuideEntity, paintSafeLoops, templateOuterLoops } from "./paintSafe";
-import { prepareObject } from "./prepare";
+import { effectivePocketDepth, prepareObject } from "./prepare";
 import { planPlateSplits } from "./split";
 
 function addReg(entities: Entity[]) {
@@ -32,7 +31,12 @@ export function generateJig(
 ): JigResult {
   const bed = bedFromSettings(settings);
   const frameOn = settings.bed === "333x88" && settings.useAdapter;
-  const prepped = objects.map((o, i) => prepareObject(o, stlMap[o.id] || null, i));
+  const meshHeights = objects.map((o, i) => (o.stlName && stlMap[o.id] ? i : -1)).filter((i) => i >= 0);
+  const prepped = objects.map((o, i) =>
+    prepareObject(o, stlMap[o.id] || null, i, { pocketDepth: settings.pocketDepth, baseThk: settings.baseThk }),
+  );
+  const tallest = meshHeights.length ? Math.max(...meshHeights.map((i) => prepped[i].partHeight)) : 0;
+  const pocketDepth = tallest ? effectivePocketDepth(settings.pocketDepth, settings.baseThk, tallest) : settings.pocketDepth;
   const pack = packObjects(prepped, bed.w, bed.h, settings);
   applyMoves(pack.placed, moves, bed.w, bed.h);
 
@@ -50,7 +54,7 @@ export function generateJig(
     plateDx = (FRAME_PLATE.w - bed.w) / 2;
     plateDy = (FRAME_PLATE.h - bed.h) / 2;
     if (settings.footprint === "tight" && placed.length) {
-      const b = bboxOf(placed.flatMap((p) => p.loops));
+      const b = footprintOf(placed);
       jigW = Math.min(FRAME_PLATE.w, Math.max(30, b.w + 2 * settings.marginX));
       jigH = FRAME_PLATE.h;
       const bedRight = bed.w;
@@ -62,7 +66,7 @@ export function generateJig(
       plateDy = 0;
     }
   } else if (settings.footprint === "tight" && placed.length) {
-    const b = bboxOf(placed.flatMap((p) => p.loops));
+    const b = footprintOf(placed);
     jigW = b.w + 2 * settings.marginX;
     jigH = b.h + 2 * settings.marginY;
     const dx = settings.marginX - b.minX;
@@ -182,16 +186,9 @@ export function generateJig(
   }));
 
   const meshXform = plateMeshXform(outer, settings.scaleComp);
-  const originMark = settings.zDownFlip
-    ? fitOriginMark(outer, meshPockets.flatMap((p) => p.loops), cornerR)
-    : null;
-  const mesh = extrudePlate(outer, meshPockets, settings.baseThk, settings.pocketDepth, settings.scaleComp, {
-    mouthChamfer: settings.zDownFlip,
-    originMark,
-  });
-  if (settings.zDownFlip) flipJigZDown(mesh);
+  const mesh = extrudePlate(outer, meshPockets, settings.baseThk, pocketDepth, settings.scaleComp);
   const plateOffset = { x: plateDx, y: plateDy };
-  const solidH = solidHeight(settings.baseThk, settings.pocketDepth);
+  const solidH = solidHeight(settings.baseThk, pocketDepth);
 
   const maxBed = settings.maxPrintBed || 250;
   const oversized = jigW > maxBed + 1e-6 || jigH > maxBed + 1e-6;
@@ -238,8 +235,7 @@ export function generateJig(
     plateOuter: outer,
     meshPockets,
     baseThk: settings.baseThk,
-    pocketDepth: settings.pocketDepth,
-    zDownFlip: !!settings.zDownFlip,
+    pocketDepth,
   };
 }
 
