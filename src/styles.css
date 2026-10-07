@@ -319,8 +319,22 @@ select {
 
 .orient-actions {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   margin-top: 8px;
+}
+
+.orient-actions .zdown-toggle {
+  margin: 0;
+  font-size: 13px;
+}
+
+.sum-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
 }
 
 .orient-card .part-view canvas {

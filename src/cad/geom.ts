@@ -101,6 +101,56 @@ export function circleLoop(cx: number, cy: number, r: number, n = 24): Loop {
   return pts;
 }
 
+function lineIntersect(a1: Pt, a2: Pt, b1: Pt, b2: Pt): Pt | null {
+  const dax = a2[0] - a1[0];
+  const day = a2[1] - a1[1];
+  const dbx = b2[0] - b1[0];
+  const dby = b2[1] - b1[1];
+  const det = dax * dby - day * dbx;
+  if (Math.abs(det) < 1e-12) return null;
+  const t = ((b1[0] - a1[0]) * dby - (b1[1] - a1[1]) * dbx) / det;
+  return [a1[0] + t * dax, a1[1] + t * day];
+}
+
+/**
+ * Offset a closed loop. Positive `dist` grows a CCW loop (outward).
+ * Returns null when the offset spikes or collapses so callers can skip it.
+ */
+export function offsetLoop(loop: Loop, dist: number): Loop | null {
+  if (!Number.isFinite(dist) || loop.length < 3) return null;
+  if (Math.abs(dist) < 1e-9) return loop.slice();
+  const pts = ensureCCW(cleanLoop(loop, 1e-9));
+  if (pts.length < 3) return null;
+  const edges: Array<{ a: Pt; b: Pt }> = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % pts.length];
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-9) return null;
+    const nx = (dy / len) * dist;
+    const ny = (-dx / len) * dist;
+    edges.push({ a: [a[0] + nx, a[1] + ny], b: [b[0] + nx, b[1] + ny] });
+  }
+  const out: Loop = [];
+  for (let i = 0; i < edges.length; i++) {
+    const prev = edges[(i + edges.length - 1) % edges.length];
+    const cur = edges[i];
+    const hit = lineIntersect(prev.a, prev.b, cur.a, cur.b);
+    if (!hit) return null;
+    if (Math.hypot(hit[0] - pts[i][0], hit[1] - pts[i][1]) > Math.abs(dist) * 6) return null;
+    out.push(hit);
+  }
+  const cleaned = cleanLoop(out, 1e-6);
+  if (cleaned.length !== pts.length) return null;
+  const area0 = Math.abs(polyArea(pts));
+  const area1 = Math.abs(polyArea(cleaned));
+  if (dist > 0 && area1 <= area0 * 0.999) return null;
+  if (dist < 0 && area1 >= area0 * 1.001) return null;
+  return ensureCCW(cleaned);
+}
+
 export function pointInPoly(pt: Pt, loop: Loop): boolean {
   const [x, y] = pt;
   let inside = false;

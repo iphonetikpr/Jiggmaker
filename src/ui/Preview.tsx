@@ -3,8 +3,10 @@ import { LAYER_SVG, PAINT_SAFE_COLOR, PAINT_SAFE_DASH } from "../constants";
 import type { Entity, JigResult, PreviewMode } from "../types";
 import bedMiniSvg from "../assets/bed-mini.svg?raw";
 import bedStdSvg from "../assets/bed-std.svg?raw";
+import { meshBBox } from "../cad/mesh";
 import { piecePose } from "../cad/pose";
 import { splitSeamMarks } from "../cad/split";
+import { zDownFlipMap } from "../cad/zDownFlip";
 import { jigOrbitCamera, orbitProject } from "./partView";
 import {
   JIG_MESH_BG,
@@ -220,7 +222,11 @@ function drawMesh(
   ctx.font = "11px sans-serif";
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText(jigHudCaption(tris.length, result.jig.w, result.jig.h, result.solidH), 12, H - 12);
+  ctx.fillText(
+    jigHudCaption(tris.length, result.jig.w, result.jig.h, result.solidH) + (result.zDownFlip ? " · Z-down" : ""),
+    12,
+    H - 12,
+  );
 }
 
 function drawSplitSeams(
@@ -261,8 +267,12 @@ function drawSplitSeams(
             map(result.jig.w, m.at, z1),
             map(0, m.at, z1),
           ];
+    const box = result.zDownFlip ? meshBBox(result.mesh) : null;
+    const projected = box
+      ? corners.map((c) => zDownFlipMap(c[0], c[1], c[2], box))
+      : corners;
     ctx.beginPath();
-    corners.forEach((c, i) => {
+    projected.forEach((c, i) => {
       const [px, py] = orbitProject(c[0], c[1], c[2], cam.cx, cam.cy, cam.cz, az, ax, cam.sc, W, H);
       if (i === 0) ctx.moveTo(px, py);
       else ctx.lineTo(px, py);
