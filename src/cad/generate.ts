@@ -2,7 +2,8 @@ import { FRAME_PLATE } from "../constants";
 import type { BedSize, Entity, JobObject, JobSettings, JigResult, Loop, PlacedPiece } from "../types";
 import { bboxOf, rectLoop, roundedRectLoop, translateLoop } from "./geom";
 import { applyMoves, packObjects, shiftPiece } from "./layout";
-import { extrudePlate, plateMeshXform, solidHeight } from "./mesh";
+import { extrudePlate, flipJigZDown, plateMeshXform, solidHeight } from "./mesh";
+import { fitOriginMark } from "./zDownFlip";
 import { bedFromSettings, plateLabel } from "./filename";
 import { paintSafeGuideEntity, paintSafeLoops, templateOuterLoops } from "./paintSafe";
 import { prepareObject } from "./prepare";
@@ -181,7 +182,14 @@ export function generateJig(
   }));
 
   const meshXform = plateMeshXform(outer, settings.scaleComp);
-  const mesh = extrudePlate(outer, meshPockets, settings.baseThk, settings.pocketDepth, settings.scaleComp);
+  const originMark = settings.zDownFlip
+    ? fitOriginMark(outer, meshPockets.flatMap((p) => p.loops), cornerR)
+    : null;
+  const mesh = extrudePlate(outer, meshPockets, settings.baseThk, settings.pocketDepth, settings.scaleComp, {
+    mouthChamfer: settings.zDownFlip,
+    originMark,
+  });
+  if (settings.zDownFlip) flipJigZDown(mesh);
   const plateOffset = { x: plateDx, y: plateDy };
   const solidH = solidHeight(settings.baseThk, settings.pocketDepth);
 
@@ -231,6 +239,7 @@ export function generateJig(
     meshPockets,
     baseThk: settings.baseThk,
     pocketDepth: settings.pocketDepth,
+    zDownFlip: !!settings.zDownFlip,
   };
 }
 

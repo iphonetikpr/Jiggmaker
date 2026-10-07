@@ -666,6 +666,8 @@ export default function App() {
           <PartViewport
             objects={objects}
             stlMap={stlMap}
+            zDownFlip={settings.zDownFlip}
+            onZDownFlip={(zDownFlip) => patchSettings({ zDownFlip })}
             onChange={(id, p) => setObjects((list) => list.map((x) => (x.id === id ? { ...x, ...p } : x)))}
           />
           <SummaryCard result={result} />
@@ -689,7 +691,8 @@ export default function App() {
             </p>
             <p>
               <b>3 · Láser vs 3D.</b> Láser = 2 hojas (POCKET + BASE) sin scaleComp. 3D = un STL; PLA aplica scaleComp
-              1.003 si está activo. Base 0 = through-hole.
+              1.003 si está activo. Base 0 = through-hole. Z-down flip voltea solo el STL 180° sobre Y (sin espejo)
+              para que la boca del pocket apoye en la cama; la plantilla no cambia.
             </p>
             <p>
               <b>4 · Impresión FDM.</b> Objetivo 250×250×250. Placas 333/334 se asumen H2 por defecto; aviso + maxPrintBed

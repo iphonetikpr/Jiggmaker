@@ -37,6 +37,7 @@ export function defaultSettings(): JobSettings {
     paintSafeInset: DEFAULTS.paintSafeInset,
     paintSafeW: DEFAULTS.paintSafeW,
     paintSafeH: DEFAULTS.paintSafeH,
+    zDownFlip: false,
   };
 }
 
@@ -93,6 +94,7 @@ export function serializeJob(
   rec.paintSafeInset = settings.paintSafeInset;
   rec.paintSafeW = settings.paintSafeW;
   rec.paintSafeH = settings.paintSafeH;
+  rec.zDownFlip = settings.zDownFlip;
 
   return {
     id: "h" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
