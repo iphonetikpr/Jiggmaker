@@ -17,7 +17,7 @@ import {
 import { previewHint, BEFORE_3D_PAN_FOOTER } from "./previewHint";
 
 function rectJob() {
-  const settings = { ...defaultSettings(), scaleComp: false };
+  const settings = { ...defaultSettings(), scaleComp: false, footprint: "bed" as const };
   const obj = newObject(0);
   obj.name = "coin";
   obj.mode = "rectangle";

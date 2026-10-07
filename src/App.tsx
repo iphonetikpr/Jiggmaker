@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULTS, HISTORY_FILENAME, HISTORY_KEY, MAX_OBJECTS } from "./constants";
 import { generateJig } from "./cad/generate";
+import { solidHeight } from "./cad/mesh";
 import {
   applyHistorySettings,
   b64ToBytes,
@@ -279,8 +280,8 @@ export default function App() {
                 )}
                 {settings.useAdapter && mini && (
                   <p className="hint">
-                    Placa 334 × 90 mm, esquinas redondeadas. Full = largo completo. Tight = acorta en X y alinea al borde
-                    derecho del frame. La plantilla sigue en cama Mini 333 × 88.
+                    Full bed imprime la placa 334 × 90 mm con esquinas redondeadas. Tight recorta solo el STL alrededor
+                    de las piezas más el margen. La plantilla sigue en cama Mini 333 × 88.
                   </p>
                 )}
                 {!mini && (
@@ -318,12 +319,20 @@ export default function App() {
                 </div>
               )}
               <div className="row">
-                <label>Huella / footprint</label>
-                <select value={settings.footprint} onChange={(e) => patchSettings({ footprint: e.target.value as JobSettings["footprint"] })}>
-                  <option value="bed">Full bed</option>
+                <label>Jig footprint</label>
+                <select
+                  aria-label="Jig footprint"
+                  value={settings.footprint}
+                  onChange={(e) => patchSettings({ footprint: e.target.value as JobSettings["footprint"] })}
+                >
                   <option value="tight">Tight to parts</option>
+                  <option value="bed">Full bed</option>
                 </select>
               </div>
+              <p className="hint">
+                Tight trims the printed jig to the parts plus Margin X/Y. The Studio template stays bed-sized, with
+                pockets in the same place as Full bed.
+              </p>
               <label className="chk">
                 <input type="checkbox" checked={settings.center} onChange={(e) => patchSettings({ center: e.target.checked })} />
                 Centrar array en la cama
@@ -349,8 +358,8 @@ export default function App() {
                   scaleComp 1.003 (solo STL)
                 </label>
                 <p className="hint">
-                  Un sólido. Base = 0 → through-hole (sin suelo; no se aplica pocketDepthExtra 0.2). DXF/SVG no usan
-                  scaleComp.
+                  Height = base thickness + pocket depth ({solidHeight(settings.baseThk, settings.pocketDepth).toFixed(1)} mm).
+                  Base = 0 → through-hole (sin suelo; no se aplica pocketDepthExtra 0.2). DXF/SVG no usan scaleComp.
                 </p>
                 <div className="row">
                   <label>maxPrintBed mm</label>
@@ -684,13 +693,14 @@ export default function App() {
               bounding box. Clearance 0.15 mm por defecto.
             </p>
             <p>
-              <b>2 · Cama y frame.</b> Mini 333×88, Large 333×418 o custom. En Mini, el checkbox de frame pasa la placa a
-              334×90 (esquinas redondeadas). Tight alinea a la derecha del frame. Large-frame queda stub.
+              <b>2 · Cama y frame.</b> Mini 333×88, Large 333×418 o custom. En Mini, el checkbox de frame pasa la placa Full
+              bed a 334×90 (esquinas redondeadas). Jig footprint Tight recorta solo el STL a las piezas más el margen; la
+              plantilla sigue a tamaño de cama. Large-frame queda stub.
             </p>
             <p>
-              <b>3 · Láser vs 3D.</b> Láser = 2 hojas (POCKET + BASE) sin scaleComp. 3D = un STL; PLA aplica scaleComp
-              1.003 si está activo. Base 0 = through-hole. Z-down flip voltea solo el STL 180° sobre Y (sin espejo)
-              para que la boca del pocket apoye en la cama; la plantilla no cambia.
+              <b>3 · Láser vs 3D.</b> Láser = 2 hojas (POCKET + BASE) del contorno de la placa, sin scaleComp. 3D = un STL;
+              altura = base + pocket depth. PLA aplica scaleComp 1.003 si está activo. Base 0 = through-hole. Up axis
+              Z down voltea la pieza 180° sobre X antes del pocket; el jig se imprime pockets-up.
             </p>
             <p>
               <b>4 · Impresión FDM.</b> Objetivo 250×250×250. Placas 333/334 se asumen H2 por defecto; aviso + maxPrintBed

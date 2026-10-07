@@ -5,7 +5,7 @@ import { defaultSettings, newObject } from "../cad/history";
 import { makeLStl } from "../cad/stl";
 import { meshFromBytes } from "../cad/prepare";
 import { orientedPartBounds } from "./partView";
-import { flipUp, summaryBedLine, summaryJigSize, summaryPlateHint, truncateName } from "./summary";
+import { flipUp, summaryBedLine, summaryJigSize, summaryPlateHint, summaryStlSize, truncateName } from "./summary";
 
 describe("summary helpers", () => {
   it("flips seating axis", () => {
@@ -20,19 +20,22 @@ describe("summary helpers", () => {
     obj.rectW = 40;
     obj.rectH = 20;
     obj.count = 2;
-    const mini = generateJig([obj], {}, defaultSettings(), {});
+    const full = { ...defaultSettings(), footprint: "bed" as const };
+    const mini = generateJig([obj], {}, full, {});
     expect(summaryBedLine(mini)).toBe("Mini · 333 × 88 mm");
     expect(summaryJigSize(mini)).toBe("333 × 88 mm");
+    expect(summaryStlSize(mini)).toBe("333 × 88 × 7.0 mm");
     expect(summaryPlateHint(mini)).toBeNull();
     expect(mini.totalUnits).toBe(2);
     expect(mini.mesh.length).toBeGreaterThan(8);
 
-    const frame = generateJig([obj], {}, { ...defaultSettings(), useAdapter: true }, {});
+    const frame = generateJig([obj], {}, { ...full, useAdapter: true }, {});
     expect(summaryBedLine(frame)).toBe("Mini · 333 × 88 mm");
     expect(summaryJigSize(frame)).toBe("334 × 90 mm");
+    expect(summaryStlSize(frame)).toBe("334 × 90 × 7.0 mm");
     expect(summaryPlateHint(frame)).toBe("frame 334×90");
 
-    const large = generateJig([obj], {}, { ...defaultSettings(), bed: "333x418" }, {});
+    const large = generateJig([obj], {}, { ...full, bed: "333x418" }, {});
     expect(summaryBedLine(large)).toBe("Large · 333 × 418 mm");
   });
 

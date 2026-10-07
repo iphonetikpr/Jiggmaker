@@ -135,8 +135,7 @@ describe("piece + pocket share one pose", () => {
     const [tx, ty, tz] = toMeshPoint(p.cx, p.cy, r.solidH, r.plateOffset, r.meshXform);
     expect(meshCoversXY(r.mesh, tx, ty, tz)).toBe(false);
     expect(pointInPoly([p.cx, p.cy], p.loops[0])).toBe(true);
-    const [ox, oy] = [8, 8];
-    const [px, py, pz] = toMeshPoint(ox, oy, r.solidH, r.plateOffset, r.meshXform);
+    const [px, py, pz] = toMeshPoint(-r.plateOffset.x + 1, -r.plateOffset.y + 1, r.solidH, r.plateOffset, r.meshXform);
     expect(meshCoversXY(r.mesh, px, py, pz)).toBe(true);
   });
 

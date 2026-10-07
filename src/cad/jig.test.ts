@@ -30,6 +30,7 @@ describe("locked constants", () => {
     expect(FRAME_PLATE.h).toBe(90);
     expect(DEFAULTS.pocketDepth).toBe(4);
     expect(DEFAULTS.baseThk).toBe(3);
+    expect(defaultSettings().footprint).toBe("tight");
     expect(DEFAULTS.matThk).toBe(3);
     expect(DEFAULTS.dpi).toBe(300);
     expect(DEFAULTS.clearance).toBe(0.15);
@@ -57,7 +58,7 @@ describe("locked constants", () => {
 
 describe("rectangular jig", () => {
   it("exports Mini plate 333×88 and matching filenames", () => {
-    const r = rectJob();
+    const r = rectJob({ footprint: "bed" });
     expect(r.jig.w).toBe(333);
     expect(r.jig.h).toBe(88);
     expect(r.totalUnits).toBe(2);
@@ -80,7 +81,7 @@ describe("rectangular jig", () => {
   });
 
   it("frame checkbox yields 334×90 plate, template stays Mini", () => {
-    const r = rectJob({ useAdapter: true });
+    const r = rectJob({ useAdapter: true, footprint: "bed" });
     expect(r.frameOn).toBe(true);
     expect(r.jig.w).toBe(334);
     expect(r.jig.h).toBe(90);
@@ -93,10 +94,10 @@ describe("rectangular jig", () => {
   });
 
   it("warns when plate > maxPrintBed and can split", () => {
-    const r = rectJob({ maxPrintBed: 250, splitPlate: false });
+    const r = rectJob({ maxPrintBed: 250, splitPlate: false, footprint: "bed" });
     expect(r.oversized).toBe(true);
     expect(r.warn).toMatch(/H2/);
-    const s = rectJob({ maxPrintBed: 250, splitPlate: true });
+    const s = rectJob({ maxPrintBed: 250, splitPlate: true, footprint: "bed" });
     expect(s.splits.length).toBeGreaterThanOrEqual(2);
     expect(s.warn).toMatch(/split/i);
   });

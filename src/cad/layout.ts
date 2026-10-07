@@ -106,7 +106,8 @@ export function packObjects(
     yCursor += band.h;
   });
 
-  if (settings.center && settings.footprint !== "tight" && placed.length) {
+  // Center for every footprint. Tight only crops the printed plate; pockets stay on the bed.
+  if (settings.center && placed.length) {
     const b = footprintOf(placed);
     const dx = (bedW - b.w) / 2 - b.minX;
     const dy = (bedH - b.h) / 2 - b.minY;

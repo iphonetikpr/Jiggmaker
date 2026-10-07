@@ -17,7 +17,7 @@ export function defaultSettings(): JobSettings {
     marginX: DEFAULTS.marginX,
     marginY: DEFAULTS.marginY,
     objGap: DEFAULTS.objGap,
-    footprint: "bed",
+    footprint: "tight",
     offsetPct: DEFAULTS.offsetPct,
     matThk: DEFAULTS.matThk,
     pickDia: DEFAULTS.pickDia,

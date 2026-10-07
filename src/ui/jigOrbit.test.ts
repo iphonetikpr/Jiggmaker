@@ -15,7 +15,7 @@ import {
 } from "./partView";
 
 function rectJob(moves: Record<string, [number, number]> = {}) {
-  const settings = { ...defaultSettings(), scaleComp: false };
+  const settings = { ...defaultSettings(), scaleComp: false, footprint: "bed" as const };
   const obj = newObject(0);
   obj.name = "coin";
   obj.mode = "rectangle";
