@@ -151,11 +151,14 @@ describe("per-object Z down", () => {
     expect(Math.abs(b.w - b.h)).toBeLessThan(0.8);
   });
 
-  it("caps jig height under the part and keeps the rib pockets", () => {
+  it("sets jig height to base plus pocket depth, even above the part", () => {
     const r = plateJob("z-", { pocketDepth: 40, baseThk: 3 });
-    expect(r.solidH).toBeLessThan(r.partHeight);
-    expect(r.solidH).toBeGreaterThan(20);
-    expect(r.meshPockets[0].loops.length).toBe(6);
+    expect(r.solidH).toBeCloseTo(43, 5);
+    expect(r.pocketDepth).toBe(40);
+    expect(r.baseThk).toBe(3);
+    expect(r.solidH).toBeGreaterThan(r.partHeight);
+    // The band covers the whole part, so the slot is the full outline.
+    expect(r.meshPockets[0].loops.length).toBe(1);
   });
 
   it("gives narrow contact slots at least 0.2 mm clearance per side", () => {

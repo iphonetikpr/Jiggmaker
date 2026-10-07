@@ -17,7 +17,7 @@ import { buildSplitMeshes, dowelCenters, dowelSitesFor, placeSpansForJoint, spli
 import type { JobSettings, PlateSplit, Tri } from "../types";
 
 function job(patch: Partial<JobSettings> = {}) {
-  const settings: JobSettings = { ...defaultSettings(), scaleComp: false, ...patch };
+  const settings: JobSettings = { ...defaultSettings(), scaleComp: false, footprint: "bed", ...patch };
   const obj = newObject(0);
   obj.name = "coin";
   obj.count = 2;
@@ -31,6 +31,7 @@ function filledLargeJob(count = 12) {
   const settings: JobSettings = {
     ...defaultSettings(),
     scaleComp: false,
+    footprint: "bed",
     bed: "333x418",
     splitPlate: true,
     maxPrintBed: 250,
@@ -225,6 +226,7 @@ describe("PLA plate split", () => {
     const settings: JobSettings = {
       ...defaultSettings(),
       scaleComp: true,
+      footprint: "bed",
       bed: "333x418",
       splitPlate: true,
       maxPrintBed: 250,

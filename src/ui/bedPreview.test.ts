@@ -79,11 +79,11 @@ describe("plate mapping", () => {
   }
 
   it("maps Mini / Frame / Large plates", () => {
-    const mini = job({ bed: "333x88", useAdapter: false });
+    const mini = job({ bed: "333x88", useAdapter: false, footprint: "bed" });
     expect(plateViewSize(mini)).toEqual({ w: 333, h: 88 });
     expect(previewPlateOffset(mini)).toEqual({ x: 0, y: 0 });
 
-    const frame = job({ bed: "333x88", useAdapter: true });
+    const frame = job({ bed: "333x88", useAdapter: true, footprint: "bed" });
     expect(frame.frameOn).toBe(true);
     expect(frame.jig.w).toBe(FRAME_PLATE.w);
     expect(frame.jig.h).toBe(FRAME_PLATE.h);
@@ -92,7 +92,7 @@ describe("plate mapping", () => {
     expect(bedToPlate(frame, 0, 0)).toEqual([0.5, 1]);
     expect(plateToBed(frame, 0.5, 1)).toEqual([0, 0]);
 
-    const large = job({ bed: "333x418", useAdapter: false });
+    const large = job({ bed: "333x418", useAdapter: false, footprint: "bed" });
     expect(plateViewSize(large)).toEqual({ w: LARGE_BED.w, h: LARGE_BED.h });
   });
 

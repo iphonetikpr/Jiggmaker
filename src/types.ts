@@ -195,8 +195,16 @@ export interface JigResult {
   splitNeeded: boolean;
   splits: PlateSplit[];
   warn: string | null;
-  /** Bed mm → plate mm (frame / tight). Same delta used for mesh pockets and laser CUT. */
+  /** Bed mm → plate mm (frame centering, or the tight-crop shift). Same delta for mesh pockets and laser CUT. */
   plateOffset: { x: number; y: number };
+  /**
+   * Bed mm of the printed plate corner (STL and laser local 0,0,0).
+   * Equals `(-plateOffset.x, -plateOffset.y)`. The Studio template stays in bed
+   * millimetres and its REG mark stays at bed (0,0). A centered tight plate does
+   * not include that origin: its corner is this point, and the laser corner mark
+   * sits 3 mm in from it.
+   */
+  jigBedOrigin: { x: number; y: number };
   /** Uniform plate scale around the plate centroid (`scaleComp`). */
   meshXform: { cx: number; cy: number; s: number };
   /** Unscaled solid height (base + pocket, or through-hole thickness). */

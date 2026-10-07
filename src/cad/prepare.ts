@@ -1,26 +1,11 @@
 import { DEFAULTS, OBJECT_COLORS } from "../constants";
 import type { HolesMode, JobObject, Loop, PreparedObject, StlMesh } from "../types";
 import { inflatedRect, originLoops, translateLoop } from "./geom";
-import { solidHeight } from "./mesh";
 import { clipToDepth, loopsArea, projectStl, silhouetteLoops, type Projected } from "./project";
 import { parseSTL } from "./stl";
 
 export interface PrepareOpts {
   pocketDepth: number;
-  baseThk: number;
-}
-
-/**
- * Keep the extruded jig shorter than the part. A requested pocket that would
- * bury the part is shortened so solid height stays 0.05 mm under part height.
- */
-export function effectivePocketDepth(requested: number, baseThk: number, partHeight: number): number {
-  if (!(partHeight > 1) || !(requested > 0)) return requested;
-  if (solidHeight(baseThk, requested) < partHeight - 1e-6) return requested;
-  const base = baseThk > 0 ? baseThk : 0;
-  const capped = partHeight - base - 0.05;
-  if (capped < 0.4) return Math.min(requested, Math.max(0.2, capped));
-  return Math.min(requested, capped);
 }
 
 function inFrame(loops: Loop[], ox: number, oy: number): Loop[] {
@@ -34,7 +19,7 @@ function inFrame(loops: Loop[], ox: number, oy: number): Loop[] {
  * the band enlarges the slot so the part can seat. The part bbox stays the
  * layout footprint.
  */
-function seatLoops(proj: Projected, mode: JobObject["mode"], clearance: number, pocketDepth: number, baseThk: number) {
+function seatLoops(proj: Projected, mode: JobObject["mode"], clearance: number, pocketDepth: number) {
   const fullClear = mode === "rectangle" ? inflatedRect(proj.bbox, clearance) : silhouetteLoops(proj, clearance);
   const fullArt = mode === "rectangle" ? inflatedRect(proj.bbox, 0) : silhouetteLoops(proj, 0);
   const fallback = fullClear.length ? fullClear : inflatedRect(proj.bbox, clearance);
@@ -44,7 +29,7 @@ function seatLoops(proj: Projected, mode: JobObject["mode"], clearance: number, 
   let loops = centered.loops;
   let artLoops = art.loops.map((l) => translateLoop(l, art.ox - centered.ox, art.oy - centered.oy));
 
-  const depth = effectivePocketDepth(pocketDepth, baseThk, proj.partHeight);
+  const depth = pocketDepth;
   if (mode === "silhouette" && depth > 0 && depth < proj.partHeight - 0.05) {
     const band = clipToDepth(proj, depth);
     if (band.tris.length) {
@@ -105,7 +90,7 @@ export function prepareObject(
       if (best !== obj.rot) proj = projectStl(mesh, obj.up, best, obj.mirror);
     }
 
-    const seated = seatLoops(proj, obj.mode, clearance, opts?.pocketDepth ?? 4, opts?.baseThk ?? 3);
+    const seated = seatLoops(proj, obj.mode, clearance, opts?.pocketDepth ?? DEFAULTS.pocketDepth);
     const loops = seated.loops;
     const centered = seated.centered;
     const artLoops = seated.artLoops;

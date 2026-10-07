@@ -1,5 +1,5 @@
 import type { JigResult } from "../types";
-import { summaryBedLine, summaryJigSize, summaryPlateHint, truncateName } from "./summary";
+import { summaryBedLine, summaryJigSize, summaryPlateHint, summaryStlSize, truncateName } from "./summary";
 
 export function SummaryCard({ result }: { result: JigResult }) {
   const hint = summaryPlateHint(result);
@@ -11,6 +11,7 @@ export function SummaryCard({ result }: { result: JigResult }) {
           <div className="sum-count">{result.totalUnits}</div>
           <div className="sum-pockets">{result.totalUnits === 1 ? "pocket" : "pockets"}</div>
           <div className="sum-bed">{summaryBedLine(result)}</div>
+          <div className="sum-bed">STL {summaryStlSize(result)}</div>
         </div>
         <div className="sum-pills">
           <span className={result.fits ? "pill ok-pill" : "pill warn-pill"}>{result.fits ? "fits" : "no cabe"}</span>
@@ -40,6 +41,10 @@ export function SummaryCard({ result }: { result: JigResult }) {
         <div>
           <span>Tallest part</span>
           <b>{result.partHeight.toFixed(1)} mm</b>
+        </div>
+        <div>
+          <span>STL size</span>
+          <b>{summaryStlSize(result)}</b>
         </div>
         <div>
           <span>Jig mesh</span>

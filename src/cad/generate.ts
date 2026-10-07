@@ -1,12 +1,22 @@
 import { FRAME_PLATE } from "../constants";
 import type { BedSize, Entity, JobObject, JobSettings, JigResult, Loop, PlacedPiece } from "../types";
 import { rectLoop, roundedRectLoop, translateLoop } from "./geom";
-import { applyMoves, footprintOf, packObjects, shiftPiece } from "./layout";
+import { applyMoves, footprintOf, packObjects } from "./layout";
 import { extrudePlate, plateMeshXform, solidHeight } from "./mesh";
 import { bedFromSettings, plateLabel } from "./filename";
 import { paintSafeGuideEntity, paintSafeLoops, templateOuterLoops } from "./paintSafe";
-import { effectivePocketDepth, prepareObject } from "./prepare";
+import { prepareObject } from "./prepare";
 import { planPlateSplits } from "./split";
+
+/** Keep a margin box inside [0, limit]. A box larger than the limit fills it. */
+function clampSpan(origin: number, size: number, limit: number): { origin: number; size: number } {
+  if (!(limit > 0)) return { origin: 0, size: Math.max(0, size) };
+  if (size >= limit - 1e-9) return { origin: 0, size: limit };
+  let o = origin;
+  if (o < 0) o = 0;
+  if (o + size > limit) o = limit - size;
+  return { origin: o, size };
+}
 
 function addReg(entities: Entity[]) {
   entities.push({ layer: "REG", points: [
@@ -31,12 +41,10 @@ export function generateJig(
 ): JigResult {
   const bed = bedFromSettings(settings);
   const frameOn = settings.bed === "333x88" && settings.useAdapter;
-  const meshHeights = objects.map((o, i) => (o.stlName && stlMap[o.id] ? i : -1)).filter((i) => i >= 0);
   const prepped = objects.map((o, i) =>
-    prepareObject(o, stlMap[o.id] || null, i, { pocketDepth: settings.pocketDepth, baseThk: settings.baseThk }),
+    prepareObject(o, stlMap[o.id] || null, i, { pocketDepth: settings.pocketDepth }),
   );
-  const tallest = meshHeights.length ? Math.max(...meshHeights.map((i) => prepped[i].partHeight)) : 0;
-  const pocketDepth = tallest ? effectivePocketDepth(settings.pocketDepth, settings.baseThk, tallest) : settings.pocketDepth;
+  const pocketDepth = settings.pocketDepth;
   const pack = packObjects(prepped, bed.w, bed.h, settings);
   applyMoves(pack.placed, moves, bed.w, bed.h);
 
@@ -46,34 +54,30 @@ export function generateJig(
   let plateDx = 0;
   let plateDy = 0;
   const placed = pack.placed.map((p) => ({ ...p }));
+  const frameDx = (FRAME_PLATE.w - bed.w) / 2;
+  const frameDy = (FRAME_PLATE.h - bed.h) / 2;
 
-  if (frameOn) {
+  if (frameOn && !(settings.footprint === "tight" && placed.length)) {
     jigW = FRAME_PLATE.w;
     jigH = FRAME_PLATE.h;
     cornerR = FRAME_PLATE.cornerR;
-    plateDx = (FRAME_PLATE.w - bed.w) / 2;
-    plateDy = (FRAME_PLATE.h - bed.h) / 2;
-    if (settings.footprint === "tight" && placed.length) {
-      const b = footprintOf(placed);
-      jigW = Math.min(FRAME_PLATE.w, Math.max(30, b.w + 2 * settings.marginX));
-      jigH = FRAME_PLATE.h;
-      const bedRight = bed.w;
-      const targetRight = bedRight - settings.marginX;
-      const shiftX = targetRight - b.maxX;
-      const shiftY = settings.marginY - b.minY;
-      for (const p of placed) shiftPiece(p, shiftX, shiftY);
-      plateDx = FRAME_PLATE.w - jigW;
-      plateDy = 0;
-    }
+    plateDx = frameDx;
+    plateDy = frameDy;
   } else if (settings.footprint === "tight" && placed.length) {
+    // Crop only the printed plate. `placed` stays in bed mm so the template matches Full bed.
     const b = footprintOf(placed);
-    jigW = b.w + 2 * settings.marginX;
-    jigH = b.h + 2 * settings.marginY;
-    const dx = settings.marginX - b.minX;
-    const dy = settings.marginY - b.minY;
-    for (const p of placed) shiftPiece(p, dx, dy);
-    plateDx = 0;
-    plateDy = 0;
+    const hostW = frameOn ? FRAME_PLATE.w : bed.w;
+    const hostH = frameOn ? FRAME_PLATE.h : bed.h;
+    const hostOx = frameOn ? frameDx : 0;
+    const hostOy = frameOn ? frameDy : 0;
+    const x = clampSpan(b.minX - settings.marginX + hostOx, b.w + 2 * settings.marginX, hostW);
+    const y = clampSpan(b.minY - settings.marginY + hostOy, b.h + 2 * settings.marginY, hostH);
+    jigW = x.size;
+    jigH = y.size;
+    plateDx = hostOx - x.origin;
+    plateDy = hostOy - y.origin;
+    const fullFrame = frameOn && Math.abs(jigW - FRAME_PLATE.w) < 1e-6 && Math.abs(jigH - FRAME_PLATE.h) < 1e-6;
+    cornerR = fullFrame ? FRAME_PLATE.cornerR : 0;
   }
 
   const plateLoops = (p: PlacedPiece): Loop[] => p.loops.map((l) => translateLoop(l, plateDx, plateDy));
@@ -230,6 +234,7 @@ export function generateJig(
     splits,
     warn,
     plateOffset,
+    jigBedOrigin: { x: -plateDx, y: -plateDy },
     meshXform,
     solidH,
     plateOuter: outer,

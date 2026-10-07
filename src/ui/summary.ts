@@ -24,6 +24,11 @@ export function summaryJigSize(result: JigResult): string {
   return `${result.jig.w.toFixed(0)} × ${result.jig.h.toFixed(0)} mm`;
 }
 
+/** Nominal exported plate, before scaleComp. Height is base thickness + pocket depth. */
+export function summaryStlSize(result: JigResult): string {
+  return `${result.jig.w.toFixed(0)} × ${result.jig.h.toFixed(0)} × ${result.solidH.toFixed(1)} mm`;
+}
+
 export function summaryPlateHint(result: JigResult): string | null {
   if (result.frameOn) return `frame ${FRAME_PLATE.w}×${FRAME_PLATE.h}`;
   return null;
