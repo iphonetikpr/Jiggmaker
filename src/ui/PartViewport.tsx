@@ -13,14 +13,10 @@ export function PartViewport({
   objects,
   stlMap,
   onChange,
-  zDownFlip,
-  onZDownFlip,
 }: {
   objects: JobObject[];
   stlMap: Record<string, ArrayBuffer | null>;
   onChange: (id: string, patch: Partial<JobObject>) => void;
-  zDownFlip: boolean;
-  onZDownFlip: (on: boolean) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [sel, setSel] = useState(0);
@@ -157,6 +153,7 @@ export function PartViewport({
       )}
       <div className="part-view">
         <canvas ref={ref} width={PART_VIEW.w} height={PART_VIEW.h} />
+        {current?.o.up === "z-" && <span className="seats-tag">▼ seats down</span>}
       </div>
       <div className="orient-actions">
         <button
@@ -167,17 +164,7 @@ export function PartViewport({
         >
           ▼ seats down · flip
         </button>
-        <label className="chk zdown-toggle">
-          <input
-            type="checkbox"
-            checked={zDownFlip}
-            onChange={(e) => onZDownFlip(e.target.checked)}
-            aria-label="Z-down flip"
-          />
-          Z-down flip
-        </label>
       </div>
-      <p className="hint">voltea el jig al exportar (rota 180°, sin espejo)</p>
       <p className="hint">Drag to orbit · scroll to zoom. Flip invierte la cara que asienta en el pocket.</p>
     </section>
   );

@@ -46,8 +46,6 @@ export interface JobSettings {
   paintSafeInset: number;
   paintSafeW: number;
   paintSafeH: number;
-  /** Export the jig STL rotated 180° about Y so pocket mouths sit on the bed. */
-  zDownFlip: boolean;
 }
 
 export interface JobObject {
@@ -207,6 +205,4 @@ export interface JigResult {
   meshPockets: MeshPocket[];
   baseThk: number;
   pocketDepth: number;
-  /** Exported jig STL is rotated 180° about Y and seated at min Z = 0. */
-  zDownFlip: boolean;
 }

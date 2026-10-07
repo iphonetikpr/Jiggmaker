@@ -14,6 +14,7 @@ export function orientPoint(
     c = z;
   switch (up) {
     case "z-":
+      // 180° about X: (x, y, z) → (x, −y, −z). det +1, not a mirror.
       b = -y;
       c = -z;
       break;
@@ -47,12 +48,16 @@ export function orientPoint(
 
 export interface Projected {
   tris: Array<[[number, number], [number, number], [number, number]]>;
+  /** World Z of each projected triangle vertex (3 per triangle), after orientation. */
+  z: Float32Array;
   bbox: [number, number, number, number];
+  minZ: number;
   partHeight: number;
 }
 
 export function projectStl(mesh: StlMesh, up: UpAxis, rotDeg: number, mirror: boolean): Projected {
   const tris: Projected["tris"] = new Array(mesh.count);
+  const z = new Float32Array(mesh.count * 3);
   let minX = Infinity,
     minY = Infinity,
     maxX = -Infinity,
@@ -72,6 +77,9 @@ export function projectStl(mesh: StlMesh, up: UpAxis, rotDeg: number, mirror: bo
       [B[0], B[1]],
       [C[0], C[1]],
     ];
+    z[i * 3] = A[2];
+    z[i * 3 + 1] = B[2];
+    z[i * 3 + 2] = C[2];
     for (const v of [A, B, C]) {
       if (v[0] < minX) minX = v[0];
       if (v[0] > maxX) maxX = v[0];
@@ -81,7 +89,62 @@ export function projectStl(mesh: StlMesh, up: UpAxis, rotDeg: number, mirror: bo
       if (v[2] > maxZ) maxZ = v[2];
     }
   }
-  return { tris, bbox: [minX, minY, maxX, maxY], partHeight: maxZ - minZ };
+  return { tris, z, bbox: [minX, minY, maxX, maxY], minZ, partHeight: maxZ - minZ };
+}
+
+/**
+ * Solid inside the seating band: every triangle from the contact plane
+ * (min Z) up through `depth`, clipped on that plane. The XY silhouette of
+ * this mesh is the union of the cross-sections in the band — the widest
+ * outline the part reaches before it is fully seated, not the contact face
+ * alone. A drafted peg that is narrow on the jig and wider 8 mm up must
+ * pocket the wide section or it jams. `bbox` stays the full part so the
+ * outline shares coordinates with the unclipped projection.
+ */
+export function clipToDepth(proj: Projected, depth: number): Projected {
+  const limit = proj.minZ + depth + 0.01;
+  const tris: Projected["tris"] = [];
+  const zs: number[] = [];
+  for (let i = 0; i < proj.tris.length; i++) {
+    const tri = proj.tris[i];
+    const zz = [proj.z[i * 3], proj.z[i * 3 + 1], proj.z[i * 3 + 2]];
+    const poly: Array<[number, number]> = [];
+    const pz: number[] = [];
+    for (let k = 0; k < 3; k++) {
+      const k2 = (k + 1) % 3;
+      const z0 = zz[k];
+      const z1 = zz[k2];
+      if (z0 <= limit) {
+        poly.push(tri[k]);
+        pz.push(z0);
+      }
+      if ((z0 <= limit) !== (z1 <= limit)) {
+        const denom = z1 - z0;
+        const t = Math.abs(denom) < 1e-12 ? 0 : (limit - z0) / denom;
+        const a = tri[k];
+        const b = tri[k2];
+        poly.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+        pz.push(limit);
+      }
+    }
+    for (let k = 1; k + 1 < poly.length; k++) {
+      tris.push([poly[0], poly[k], poly[k + 1]]);
+      zs.push(pz[0], pz[k], pz[k + 1]);
+    }
+  }
+  return {
+    tris,
+    z: Float32Array.from(zs),
+    bbox: proj.bbox,
+    minZ: proj.minZ,
+    partHeight: proj.partHeight,
+  };
+}
+
+export function loopsArea(loops: Loop[]): number {
+  let a = 0;
+  for (const loop of loops) a += Math.abs(polyArea(loop));
+  return a;
 }
 
 function fillTriangle(
@@ -257,11 +320,12 @@ function marching(grid: Uint8Array, w: number, h: number): Loop[] {
   return loops;
 }
 
-export function silhouetteLoops(proj: Projected, clearance: number): Loop[] {
+export function silhouetteLoops(proj: Projected, clearance: number, maxPixel?: number): Loop[] {
   const [minX, minY, maxX, maxY] = proj.bbox;
   const bw = maxX - minX,
     bh = maxY - minY;
-  const pixel = Math.min(0.5, Math.max(0.08, Math.max(bw, bh) / 800));
+  let pixel = Math.min(0.5, Math.max(0.08, Math.max(bw, bh) / 800));
+  if (maxPixel && maxPixel > 0) pixel = Math.min(pixel, Math.max(0.05, maxPixel));
   const rad = Math.max(0, clearance) / pixel;
   const pad = Math.ceil(rad) + 2;
   const gw = Math.ceil(bw / pixel) + 2 * pad + 1;

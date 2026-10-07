@@ -15,8 +15,7 @@ import {
   pointInPoly,
   polyArea,
 } from "./geom";
-import { applyMeshXform, extrudePlate, flipJigZDown, meshBBox } from "./mesh";
-import { fitOriginMark } from "./zDownFlip";
+import { applyMeshXform, extrudePlate, meshBBox } from "./mesh";
 
 export interface SplitMesh {
   split: PlateSplit;
@@ -393,16 +392,9 @@ export function buildSplitMeshes(result: JigResult): SplitMesh[] {
     const clipped = clipLoopToRect(result.plateOuter, s.x0, s.y0, s.x1, s.y1);
     const outer = mergeCollinear(ensureCCW(clipped));
     const pockets = clipPockets(result.meshPockets, s);
-    const originMark = result.zDownFlip
-      ? fitOriginMark(outer, pockets.flatMap((p) => p.loops), result.jig.cornerR)
-      : null;
-    const mesh = extrudePlate(outer, pockets, result.baseThk, result.pocketDepth, false, {
-      mouthChamfer: result.zDownFlip,
-      originMark,
-    });
+    const mesh = extrudePlate(outer, pockets, result.baseThk, result.pocketDepth, false);
     const withPins = attachConnectors(mesh, s, result);
     applyMeshXform(withPins, result.meshXform);
-    if (result.zDownFlip) flipJigZDown(withPins);
     return { split: s, mesh: withPins };
   });
 }

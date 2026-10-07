@@ -101,14 +101,16 @@ export function ObjectCard({
         />
       </div>
       <div className="row">
-        <label>Eje up</label>
-        <select value={obj.up} onChange={(e) => onChange({ up: e.target.value as JobObject["up"] })}>
+        <label htmlFor={`up-${obj.id}`}>Up axis</label>
+        <select
+          id={`up-${obj.id}`}
+          aria-label="Up axis"
+          value={obj.up}
+          onChange={(e) => onChange({ up: e.target.value as JobObject["up"] })}
+        >
           <option value="z+">Z up</option>
-          <option value="z-">Z down</option>
-          <option value="y+">Y up</option>
-          <option value="y-">Y down</option>
-          <option value="x+">X up</option>
-          <option value="x-">X down</option>
+          <option value="z-">Z down (flip)</option>
+          {obj.up !== "z+" && obj.up !== "z-" && <option value={obj.up}>{obj.up}</option>}
         </select>
       </div>
       <div className="row">

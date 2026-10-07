@@ -49,13 +49,13 @@ export function parseSTL(buf: ArrayBuffer): StlMesh {
   throw new Error("Unrecognized STL");
 }
 
-export function makeBoxStl(w: number, h: number, d: number): ArrayBuffer {
-  const x0 = 0,
-    y0 = 0,
-    z0 = 0,
-    x1 = w,
-    y1 = h,
-    z1 = d;
+export function makeBoxStl(w: number, h: number, d: number, ox = 0, oy = 0, oz = 0): ArrayBuffer {
+  const x0 = ox,
+    y0 = oy,
+    z0 = oz,
+    x1 = ox + w,
+    y1 = oy + h,
+    z1 = oz + d;
   const faces: Array<[[number, number, number], [number, number, number], [number, number, number]]> = [
     [
       [x0, y0, z0],
@@ -156,6 +156,111 @@ export function makeBoxStl(w: number, h: number, d: number): ArrayBuffer {
 /** L-footprint prism (40×15 bar + 15×30 stem) for silhouette tests. */
 export function makeLStl(d = 8): ArrayBuffer {
   return mergeBinaryStl([makeBoxStl(40, 15, d), makeBoxStl(15, 30, d)]);
+}
+
+type Xyz = [number, number, number];
+
+/**
+ * Loft one rectangle to another. Bottom is the z0 rectangle, top is z1.
+ * Used for a drafted peg that widens as it leaves the contact face.
+ */
+function makeLoftRectStl(
+  x0: number,
+  y0: number,
+  w0: number,
+  h0: number,
+  z0: number,
+  x1: number,
+  y1: number,
+  w1: number,
+  h1: number,
+  z1: number,
+): ArrayBuffer {
+  const b: Xyz[] = [
+    [x0, y0, z0],
+    [x0 + w0, y0, z0],
+    [x0 + w0, y0 + h0, z0],
+    [x0, y0 + h0, z0],
+  ];
+  const t: Xyz[] = [
+    [x1, y1, z1],
+    [x1 + w1, y1, z1],
+    [x1 + w1, y1 + h1, z1],
+    [x1, y1 + h1, z1],
+  ];
+  const faces: Xyz[][] = [
+    [b[0], b[2], b[1]],
+    [b[0], b[3], b[2]],
+    [t[0], t[1], t[2]],
+    [t[0], t[2], t[3]],
+  ];
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4;
+    faces.push([b[i], b[j], t[j]], [b[i], t[j], t[i]]);
+  }
+  return facesToBinaryStl(faces as Array<[Xyz, Xyz, Xyz]>);
+}
+
+function facesToBinaryStl(faces: Array<[Xyz, Xyz, Xyz]>): ArrayBuffer {
+  const n = faces.length;
+  const buf = new ArrayBuffer(84 + 50 * n);
+  const view = new DataView(buf);
+  view.setUint32(80, n, true);
+  let o = 84;
+  for (const f of faces) {
+    const ux = f[1][0] - f[0][0],
+      uy = f[1][1] - f[0][1],
+      uz = f[1][2] - f[0][2];
+    const vx = f[2][0] - f[0][0],
+      vy = f[2][1] - f[0][1],
+      vz = f[2][2] - f[0][2];
+    let nx = uy * vz - uz * vy,
+      ny = uz * vx - ux * vz,
+      nz = ux * vy - uy * vx;
+    const len = Math.hypot(nx, ny, nz) || 1;
+    view.setFloat32(o, nx / len, true);
+    view.setFloat32(o + 4, ny / len, true);
+    view.setFloat32(o + 8, nz / len, true);
+    o += 12;
+    for (const v of f) {
+      view.setFloat32(o, v[0], true);
+      view.setFloat32(o + 4, v[1], true);
+      view.setFloat32(o + 8, v[2], true);
+      o += 12;
+    }
+    view.setUint16(o, 0, true);
+    o += 2;
+  }
+  return buf;
+}
+
+/**
+ * Drafted peg, narrow at +Z. 40×40 at z=0, 10×10 at z=20, same center.
+ * Z down puts the 10×10 on the jig. Eight millimetres up the section is 22×22,
+ * and the rest of the peg keeps widening out to 40×40 above a shallow pocket.
+ */
+export function makeDraftedPegStl(): ArrayBuffer {
+  const top = 10;
+  const bot = 40;
+  const height = 20;
+  return makeLoftRectStl((bot - top) / 2, (bot - top) / 2, top, top, height, 0, 0, bot, bot, 0);
+}
+
+/** Plate body on the bottom, six ribs standing on top. Z-down seats on the ribs. */
+export function makeSeatingPlateStl(): ArrayBuffer {
+  const plateW = 139.7;
+  const plateH = 177.8;
+  const slab = 2.5;
+  const total = 26.5;
+  const ribW = 10;
+  const ribD = 16;
+  const boxes = [makeBoxStl(plateW, plateH, slab)];
+  const xs = [18, plateW - 18 - ribW];
+  const ys = [16, (plateH - ribD) / 2, plateH - 16 - ribD];
+  for (const x of xs) {
+    for (const y of ys) boxes.push(makeBoxStl(ribW, ribD, total - slab, x, y, slab));
+  }
+  return mergeBinaryStl(boxes);
 }
 
 function mergeBinaryStl(bufs: ArrayBuffer[]): ArrayBuffer {
