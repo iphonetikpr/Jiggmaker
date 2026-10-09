@@ -655,6 +655,10 @@ select {
   display: none;
 }
 
+.thin-base-warn {
+  margin: 8px 0 0;
+}
+
 .warnbar {
   background: color-mix(in srgb, var(--warn) 16%, var(--surface));
   color: var(--warn);

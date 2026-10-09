@@ -5,7 +5,16 @@ import { defaultSettings, newObject } from "../cad/history";
 import { makeLStl } from "../cad/stl";
 import { meshFromBytes } from "../cad/prepare";
 import { orientedPartBounds } from "./partView";
-import { flipUp, summaryBedLine, summaryJigSize, summaryPlateHint, summaryStlSize, truncateName } from "./summary";
+import {
+  flipUp,
+  summaryBedLine,
+  summaryJigSize,
+  summaryPlateHint,
+  summaryStlSize,
+  THIN_BASE_WARNING,
+  thinBaseWarning,
+  truncateName,
+} from "./summary";
 
 describe("summary helpers", () => {
   it("flips seating axis", () => {
@@ -24,7 +33,7 @@ describe("summary helpers", () => {
     const mini = generateJig([obj], {}, full, {});
     expect(summaryBedLine(mini)).toBe("Mini · 333 × 88 mm");
     expect(summaryJigSize(mini)).toBe("333 × 88 mm");
-    expect(summaryStlSize(mini)).toBe("333 × 88 × 7.0 mm");
+    expect(summaryStlSize(mini)).toBe("333 × 88 × 5.0 mm");
     expect(summaryPlateHint(mini)).toBeNull();
     expect(mini.totalUnits).toBe(2);
     expect(mini.mesh.length).toBeGreaterThan(8);
@@ -32,7 +41,7 @@ describe("summary helpers", () => {
     const frame = generateJig([obj], {}, { ...full, useAdapter: true }, {});
     expect(summaryBedLine(frame)).toBe("Mini · 333 × 88 mm");
     expect(summaryJigSize(frame)).toBe("334 × 90 mm");
-    expect(summaryStlSize(frame)).toBe("334 × 90 × 7.0 mm");
+    expect(summaryStlSize(frame)).toBe("334 × 90 × 5.0 mm");
     expect(summaryPlateHint(frame)).toBe("frame 334×90");
 
     const large = generateJig([obj], {}, { ...full, bed: "333x418" }, {});
@@ -46,6 +55,19 @@ describe("summary helpers", () => {
 
   it("reports default clearance lock", () => {
     expect(DEFAULTS.clearance).toBe(0.15);
+    expect(DEFAULTS.baseThk).toBe(2);
+    expect(DEFAULTS.pocketDepth).toBe(3);
+  });
+
+  it("warns only when the exported plate exceeds 200 mm and the base is under 3 mm", () => {
+    expect(thinBaseWarning(333, 418, 2)).toBe(THIN_BASE_WARNING);
+    expect(thinBaseWarning(144, 182, 2)).toBeNull();
+    expect(thinBaseWarning(333, 418, 3)).toBeNull();
+    expect(thinBaseWarning(200, 88, 2)).toBeNull();
+    expect(thinBaseWarning(200.1, 10, 2.9)).toBe(THIN_BASE_WARNING);
+    const large = generateJig([newObject(0)], {}, { ...defaultSettings(), bed: "333x418", footprint: "bed" }, {});
+    expect(thinBaseWarning(large.jig.w, large.jig.h, large.baseThk)).toBe(THIN_BASE_WARNING);
+    expect(large.baseThk).toBe(2);
   });
 });
 

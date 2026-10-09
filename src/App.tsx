@@ -32,6 +32,7 @@ import { PaintSafeFields } from "./ui/PaintSafeFields";
 import { PartViewport } from "./ui/PartViewport";
 import { Preview } from "./ui/Preview";
 import { SummaryCard } from "./ui/SummaryCard";
+import { thinBaseWarning } from "./ui/summary";
 import { ThemeToggle } from "./ui/ThemeToggle";
 
 export default function App() {
@@ -56,6 +57,7 @@ export default function App() {
   const patchSettings = (p: Partial<JobSettings>) => setSettings((s) => ({ ...s, ...p }));
 
   const result = useMemo(() => generateJig(objects, stlMap, settings, moves), [objects, settings, moves, stlMap]);
+  const baseWarn = thinBaseWarning(result.jig.w, result.jig.h, settings.baseThk);
 
   const stem = baseName(result, objects[0]?.name || "jig");
 
@@ -349,6 +351,7 @@ export default function App() {
                   <label>Base thickness mm</label>
                   <NumberField min={0} step={0.2} value={settings.baseThk} onChange={(baseThk) => patchSettings({ baseThk })} aria-label="Base thickness mm" />
                 </div>
+                {baseWarn ? <p className="warnbar thin-base-warn">{baseWarn}</p> : null}
                 <div className="row">
                   <label>Pocket depth mm</label>
                   <NumberField min={0.5} step={0.5} value={settings.pocketDepth} onChange={(pocketDepth) => patchSettings({ pocketDepth })} aria-label="Pocket depth mm" />

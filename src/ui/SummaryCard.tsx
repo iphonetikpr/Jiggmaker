@@ -1,8 +1,9 @@
 import type { JigResult } from "../types";
-import { summaryBedLine, summaryJigSize, summaryPlateHint, summaryStlSize, truncateName } from "./summary";
+import { summaryBedLine, summaryJigSize, summaryPlateHint, summaryStlSize, thinBaseWarning, truncateName } from "./summary";
 
 export function SummaryCard({ result }: { result: JigResult }) {
   const hint = summaryPlateHint(result);
+  const baseWarn = thinBaseWarning(result.jig.w, result.jig.h, result.baseThk);
   return (
     <section className="card summary-card">
       <h2>Summary</h2>
@@ -51,6 +52,7 @@ export function SummaryCard({ result }: { result: JigResult }) {
           <b>{result.mesh.length} triangles</b>
         </div>
       </div>
+      {baseWarn ? <p className="warnbar thin-base-warn">{baseWarn}</p> : null}
     </section>
   );
 }
