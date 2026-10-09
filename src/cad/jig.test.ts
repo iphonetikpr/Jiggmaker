@@ -28,8 +28,8 @@ describe("locked constants", () => {
     expect(MINI_BED).toEqual({ w: 333, h: 88, id: "333x88", name: "Mini" });
     expect(FRAME_PLATE.w).toBe(334);
     expect(FRAME_PLATE.h).toBe(90);
-    expect(DEFAULTS.pocketDepth).toBe(4);
-    expect(DEFAULTS.baseThk).toBe(3);
+    expect(DEFAULTS.pocketDepth).toBe(3);
+    expect(DEFAULTS.baseThk).toBe(2);
     expect(defaultSettings().footprint).toBe("tight");
     expect(DEFAULTS.matThk).toBe(3);
     expect(DEFAULTS.dpi).toBe(300);
@@ -176,8 +176,8 @@ describe("history", () => {
     const job = serializeJob("demo", settings, [obj], {}, {});
     expect(job.settings.bed).toBe("333x88");
     expect(job.settings.useAdapter).toBe(true);
-    expect(job.settings.baseThk).toBe(3);
-    expect(job.settings.pocketDepth).toBe(4);
+    expect(job.settings.baseThk).toBe(2);
+    expect(job.settings.pocketDepth).toBe(3);
     const restored = applyHistorySettings(job.settings);
     expect(restored.useAdapter).toBe(true);
     expect(restored.scaleComp).toBe(false);

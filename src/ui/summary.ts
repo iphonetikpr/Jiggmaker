@@ -1,4 +1,4 @@
-import { FRAME_PLATE } from "../constants";
+import { FRAME_PLATE, THIN_BASE_MM, THIN_JIG_SPAN_MM } from "../constants";
 import type { JigResult, UpAxis } from "../types";
 
 export const FLIP_UP: Record<UpAxis, UpAxis> = {
@@ -27,6 +27,15 @@ export function summaryJigSize(result: JigResult): string {
 /** Nominal exported plate, before scaleComp. Height is base thickness + pocket depth. */
 export function summaryStlSize(result: JigResult): string {
   return `${result.jig.w.toFixed(0)} × ${result.jig.h.toFixed(0)} × ${result.solidH.toFixed(1)} mm`;
+}
+
+export const THIN_BASE_WARNING =
+  "Jig > 200 mm: recomendamos Base thickness de 3 mm para evitar que se doble o levante las esquinas en PLA";
+
+/** Non-blocking. Uses the exported plate (tight crop or full bed), not the part bbox. */
+export function thinBaseWarning(jigW: number, jigH: number, baseThk: number): string | null {
+  if (Math.max(jigW, jigH) > THIN_JIG_SPAN_MM && baseThk < THIN_BASE_MM) return THIN_BASE_WARNING;
+  return null;
 }
 
 export function summaryPlateHint(result: JigResult): string | null {

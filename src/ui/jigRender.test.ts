@@ -52,7 +52,7 @@ describe("3D jig lighting", () => {
     const r = rectJob();
     expect(r.jig.w).toBe(333);
     expect(r.jig.h).toBe(88);
-    expect(r.solidH).toBeCloseTo(7, 5);
+    expect(r.solidH).toBeCloseTo(5, 5);
     const W = 420,
       H = 240;
     const cam = jigOrbitCamera(r.jig.w, r.jig.h, r.solidH, r.mesh, W, H, 1);
@@ -178,10 +178,10 @@ describe("preview footer by tab", () => {
 });
 
 describe("3D overlay caption", () => {
-  it("reports CAD plate size 333×88×7.0", () => {
+  it("reports CAD plate size 333×88×5.0", () => {
     const r = rectJob();
     expect(jigHudCaption(r.mesh.length, r.jig.w, r.jig.h, r.solidH)).toBe(
-      `drag to rotate · scroll to zoom · click a cube face · ${r.mesh.length.toLocaleString("en-US")} tris · 333×88×7.0 mm`,
+      `drag to rotate · scroll to zoom · click a cube face · ${r.mesh.length.toLocaleString("en-US")} tris · 333×88×5.0 mm`,
     );
   });
 });

@@ -12,9 +12,14 @@ export const LARGE_BED = { w: 333, h: 418, id: "333x418", name: "Large" } as con
 /** Frame ON (Mini only). Export plate stays 334×90 — do not shrink by FRAME_CLEARANCE. */
 export const FRAME_PLATE = { w: 334, h: 90, cornerR: 8 } as const;
 
+/** Printed plate long side above this, with a base thinner than THIN_BASE_MM, shows a PLA warp warning. */
+export const THIN_JIG_SPAN_MM = 200;
+/** Recommended base when the printed plate exceeds THIN_JIG_SPAN_MM. The UI does not apply this automatically. */
+export const THIN_BASE_MM = 3;
+
 export const DEFAULTS = {
-  pocketDepth: 4,
-  baseThk: 3,
+  pocketDepth: 3,
+  baseThk: 2,
   matThk: 3,
   dpi: 300,
   clearance: 0.15,

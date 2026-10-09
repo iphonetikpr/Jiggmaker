@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULTS, LARGE_BED } from "../constants";
-import { summaryJigSize, summaryStlSize } from "../ui/summary";
+import { summaryJigSize, summaryStlSize, THIN_BASE_WARNING, thinBaseWarning } from "../ui/summary";
 import { generateJig } from "./generate";
 import { bboxOf } from "./geom";
 import { applyHistorySettings, defaultSettings, newObject } from "./history";
@@ -48,8 +48,10 @@ describe("tight jig footprint", () => {
     expect(tight.jig.h).toBeCloseTo(177.8 + 2 * DEFAULTS.marginY, 0);
     expect(full.jig.w).toBe(LARGE_BED.w);
     expect(full.jig.h).toBe(LARGE_BED.h);
-    expect(summaryStlSize(tight)).toBe("144 × 182 × 7.0 mm");
+    expect(summaryStlSize(tight)).toBe("144 × 182 × 5.0 mm");
     expect(tight.solidH).toBeCloseTo(DEFAULTS.baseThk + DEFAULTS.pocketDepth, 5);
+    expect(thinBaseWarning(tight.jig.w, tight.jig.h, tight.baseThk)).toBeNull();
+    expect(thinBaseWarning(full.jig.w, full.jig.h, full.baseThk)).toBe(THIN_BASE_WARNING);
   });
 
   it("keeps the Studio template identical to Full bed, pockets at the same bed positions", () => {
@@ -104,7 +106,7 @@ describe("tight jig footprint", () => {
   });
 
   it("sets height to base thickness plus pocket depth", () => {
-    expect(solidHeight(DEFAULTS.baseThk, DEFAULTS.pocketDepth)).toBe(7);
+    expect(solidHeight(DEFAULTS.baseThk, DEFAULTS.pocketDepth)).toBe(5);
     const deep = seatingJob({ footprint: "tight", baseThk: 3, pocketDepth: 21 });
     expect(deep.solidH).toBeCloseTo(24, 5);
     expect(deep.pocketDepth).toBe(21);

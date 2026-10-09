@@ -26,7 +26,7 @@ Large-frame as a mechanical system is **stubbed** in the UI (Large bed jigs work
 | `frameClearance` | 0.3 mm/side (documented; **export plate stays 334 × 90**) |
 | `scaleComp` | 1.003 PLA STL only |
 | `pocketDepthExtra` | 0.2 mm, skipped when `baseThickness = 0` (through-hole) |
-| Defaults | pocketDepth 4, baseThk 3, matThk 3, dpi 300, clearance 0.15 |
+| Defaults | pocketDepth 3, baseThk 2, matThk 3, dpi 300, clearance 0.15 |
 
 Laser = two bonded sheets (POCKET + BASE). 3D = one solid. Base thickness 0 = through-holes; the part sits on the printer bed.
 
