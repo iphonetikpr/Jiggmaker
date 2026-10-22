@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULTS, HISTORY_FILENAME, HISTORY_KEY, MAX_OBJECTS } from "./constants";
+import {
+  BUILTIN_DEFAULTS_ID,
+  applyObjectParams,
+  capturePreset,
+  listPresets,
+  presetDiffers,
+  saveUserPresets,
+  type NamedPreset,
+} from "./cad/presets";
+import { materializeProject, parseProject, projectFilename, serializeProject } from "./cad/projectFile";
+import { browserStore } from "./storage/store";
 import { generateJig } from "./cad/generate";
 import { solidHeight } from "./cad/mesh";
 import {
@@ -34,6 +45,7 @@ import { Preview } from "./ui/Preview";
 import { SummaryCard } from "./ui/SummaryCard";
 import { thinBaseWarning } from "./ui/summary";
 import { ThemeToggle } from "./ui/ThemeToggle";
+import { PresetPanel } from "./ui/PresetPanel";
 
 export default function App() {
   const [step, setStep] = useState<StepId>("setup");
@@ -49,6 +61,12 @@ export default function App() {
   const [history, setHistory] = useState<HistoryJob[]>([]);
   const pngCanvas = useRef<HTMLCanvasElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
+  const projectRef = useRef<HTMLInputElement>(null);
+  const presetStore = useRef(browserStore());
+  const [presets, setPresets] = useState<NamedPreset[]>(() => listPresets(browserStore()));
+  const [activePresetId, setActivePresetId] = useState<string | null>(BUILTIN_DEFAULTS_ID);
+  const [presetDraft, setPresetDraft] = useState("");
+  const [projectName, setProjectName] = useState<string | null>(null);
 
   useEffect(() => {
     setHistory(loadHistory());
@@ -58,6 +76,8 @@ export default function App() {
 
   const result = useMemo(() => generateJig(objects, stlMap, settings, moves), [objects, settings, moves, stlMap]);
   const baseWarn = thinBaseWarning(result.jig.w, result.jig.h, settings.baseThk);
+  const activePreset = presets.find((p) => p.id === activePresetId) ?? null;
+  const presetDirty = activePreset ? presetDiffers(activePreset, settings, objects) : false;
 
   const stem = baseName(result, objects[0]?.name || "jig");
 
@@ -148,6 +168,100 @@ export default function App() {
     downloadBytes(HISTORY_FILENAME, JSON.stringify(jobs), "application/json");
   };
 
+  const persistPresets = (nextUser: NamedPreset[]) => {
+    if (!saveUserPresets(presetStore.current, nextUser)) {
+      alert("No se pudo guardar el preset (localStorage lleno).");
+      return false;
+    }
+    setPresets(listPresets(presetStore.current));
+    return true;
+  };
+
+  const savePreset = () => {
+    const name = presetDraft.trim();
+    if (!name) {
+      alert("Ponle un nombre al preset.");
+      return;
+    }
+    if (name.toLowerCase() === "defaults") {
+      alert("Defaults es de solo lectura.");
+      return;
+    }
+    const existing = presets.find((p) => !p.readonly && p.name === name);
+    const captured = capturePreset(name, settings, objects, existing?.id);
+    const user = presets.filter((p) => !p.readonly && p.id !== captured.id);
+    if (!persistPresets([captured, ...user])) return;
+    setActivePresetId(captured.id);
+    setPresetDraft("");
+  };
+
+  const loadPreset = (id: string) => {
+    const preset = presets.find((p) => p.id === id);
+    if (!preset) return;
+    setSettings(applyHistorySettings(preset.settings));
+    setObjects((list) => applyObjectParams(list, preset.objects));
+    setActivePresetId(preset.id);
+    setProjectName(null);
+  };
+
+  const renamePreset = (id: string) => {
+    const preset = presets.find((p) => p.id === id);
+    if (!preset || preset.readonly) return;
+    const name = prompt("Nuevo nombre", preset.name);
+    if (!name || !name.trim() || name.trim() === preset.name) return;
+    if (name.trim().toLowerCase() === "defaults") {
+      alert("Defaults es de solo lectura.");
+      return;
+    }
+    const user = presets
+      .filter((p) => !p.readonly)
+      .map((p) => (p.id === id ? { ...p, name: name.trim() } : p));
+    persistPresets(user);
+  };
+
+  const deletePreset = (id: string) => {
+    const preset = presets.find((p) => p.id === id);
+    if (!preset || preset.readonly) return;
+    if (!confirm("¿Borrar preset " + preset.name + "?")) return;
+    const user = presets.filter((p) => !p.readonly && p.id !== id);
+    if (!persistPresets(user)) return;
+    if (activePresetId === id) setActivePresetId(null);
+  };
+
+  const exportProject = () => {
+    const name = objects[0]?.name || objects[0]?.stlName || "proyecto";
+    const doc = serializeProject(name, settings, objects, stlMap, moves);
+    downloadBytes(projectFilename(doc.name), JSON.stringify(doc, null, 2), "application/json");
+    setProjectName(doc.name);
+  };
+
+  const importProject = async (file: File) => {
+    let json: unknown;
+    try {
+      json = JSON.parse(await file.text());
+    } catch {
+      alert("JSON no válido.");
+      return;
+    }
+    const parsed = parseProject(json);
+    if (!parsed.ok) {
+      alert(parsed.error);
+      return;
+    }
+    const job = materializeProject(parsed.value);
+    if (!job.ok) {
+      alert(job.error);
+      return;
+    }
+    setSettings(job.value.settings);
+    setObjects(job.value.objects);
+    setStlMap(job.value.stlMap);
+    setMoves(job.value.moves);
+    setActivePresetId(null);
+    setProjectName(job.value.name);
+    setStep("setup");
+  };
+
   const importHistory = (file: File) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -193,6 +307,10 @@ export default function App() {
         <h1>
           Jiggmaker <span>· eufyMake E1</span>
         </h1>
+        <span className="preset-chip" aria-live="polite">
+          <b>{activePreset?.name ?? "Sin preset"}</b>
+          {activePreset && presetDirty ? <span className="pill warn-pill">modificado</span> : null}
+        </span>
         <span className="sp" />
         <ThemeToggle />
         <button className="ghost" type="button" onClick={() => setHelp(true)}>
@@ -209,6 +327,33 @@ export default function App() {
               </button>
             ))}
           </div>
+
+          <PresetPanel
+            presets={presets}
+            activeId={activePresetId}
+            dirty={presetDirty}
+            draftName={presetDraft}
+            projectName={projectName}
+            onDraftName={setPresetDraft}
+            onSave={savePreset}
+            onLoad={loadPreset}
+            onRename={renamePreset}
+            onDelete={deletePreset}
+            onExportProject={exportProject}
+            onImportProject={() => projectRef.current?.click()}
+          />
+          <input
+            ref={projectRef}
+            type="file"
+            accept="application/json,.json,.jiggmaker.json"
+            hidden
+            aria-label="Import project"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void importProject(f);
+              e.target.value = "";
+            }}
+          />
 
           {step === "setup" && (
             <>
@@ -717,7 +862,9 @@ export default function App() {
             </p>
             <p>
               <b>Jobs.</b> Se guardan en este navegador (<code>eufyJig.history.v1</code>), igual en Docker y en GitHub
-              Pages. Cada URL tiene su propio almacén: Export/Import JSON para copiar entre el NAS y Pages.
+              Pages. Cada URL tiene su propio almacén: Export/Import JSON para copiar entre el NAS y Pages. Presets
+              (parámetros, sin STL) viven en este navegador. Export project escribe un <code>.jiggmaker.json</code> con
+              piezas, posiciones y STL.
             </p>
             <button className="btn primary" type="button" onClick={() => setHelp(false)}>
               Entendido

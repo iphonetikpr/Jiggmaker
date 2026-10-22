@@ -771,6 +771,63 @@ html[data-theme="light"] .dlgrid button.primary span {
   cursor: not-allowed;
 }
 
+.preset-active {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.preset-active span {
+  color: var(--muted);
+}
+
+.preset-active b {
+  font-weight: 700;
+}
+
+.preset-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.preset-chip b {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.preset-list {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.preset-list li {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.preset-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.preset-list li.on .hi-name {
+  color: var(--accent);
+}
+
+.preset-list .ghost {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
 .histitem {
   display: flex;
   gap: 8px;

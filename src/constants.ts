@@ -49,6 +49,11 @@ export const PAINT_SAFE_DASH = [1.6, 1] as const;
 export const HISTORY_KEY = "eufyJig.history.v1";
 export const HISTORY_FILENAME = "eufyMake_jig_history.json";
 
+/** User presets. Built-in Defaults is not stored here. Swap the StringStore to move this off localStorage. */
+export const PRESET_KEY = "jiggmaker.presets.v1";
+export const PROJECT_SCHEMA = "jiggmaker.project";
+export const PROJECT_SCHEMA_VERSION = 1;
+
 export const HISTORY_SETTING_FIELDS = [
   "bed",
   "bedW",
