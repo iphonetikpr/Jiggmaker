@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { LAYER_SVG, PAINT_SAFE_COLOR, PAINT_SAFE_DASH } from "../constants";
-import type { Entity, JigResult, PreviewMode } from "../types";
+import type { Entity, JigResult, PreviewMode, Tri } from "../types";
 import bedMiniSvg from "../assets/bed-mini.svg?raw";
 import bedStdSvg from "../assets/bed-std.svg?raw";
 import { piecePose } from "../cad/pose";
@@ -197,10 +197,14 @@ function drawMesh(
   color: string,
   dpr: number,
   dragging: boolean,
+  meshPreview: { mesh: Tri[]; w: number; h: number; solidH: number; title: string } | null,
 ): void {
   ctx.fillStyle = "#202024";
   ctx.fillRect(0, 0, W, H);
-  const tris = result.mesh;
+  const tris = meshPreview?.mesh ?? result.mesh;
+  const viewW = meshPreview?.w ?? result.jig.w;
+  const viewH = meshPreview?.h ?? result.jig.h;
+  const viewSolid = meshPreview?.solidH ?? result.solidH;
   if (!tris.length) {
     ctx.fillStyle = "#8a8a92";
     ctx.font = "13px sans-serif";
@@ -209,22 +213,18 @@ function drawMesh(
     return;
   }
   const sample = jigPreviewSample(W, H, dpr, dragging);
-  const cam = jigOrbitCamera(result.jig.w, result.jig.h, result.solidH, tris, sample.w, sample.h, zoom);
+  const cam = jigOrbitCamera(viewW, viewH, viewSolid, tris, sample.w, sample.h, zoom);
   const frame = renderJigMesh(tris, cam, az, ax, sample.w, sample.h, hexToRgb(color), JIG_MESH_BG);
   blitFrame(ctx, off, frame.data, frame.w, frame.h, W, H);
-  if (result.splits.length) {
-    const overlay = jigOrbitCamera(result.jig.w, result.jig.h, result.solidH, tris, W, H, zoom);
+  if (!meshPreview && result.splits.length) {
+    const overlay = jigOrbitCamera(viewW, viewH, viewSolid, tris, W, H, zoom);
     drawSplitSeams(ctx, result, overlay, az, ax, W, H);
   }
   ctx.fillStyle = "#b9b9c2";
   ctx.font = "11px sans-serif";
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText(
-    jigHudCaption(tris.length, result.jig.w, result.jig.h, result.solidH),
-    12,
-    H - 12,
-  );
+  ctx.fillText(meshPreview ? meshPreview.title : jigHudCaption(tris.length, viewW, viewH, viewSolid), 12, H - 12);
 }
 
 function drawSplitSeams(
@@ -304,6 +304,7 @@ export function Preview({
   jigColor,
   resetToken,
   onMove,
+  meshPreview = null,
 }: {
   result: JigResult | null;
   mode: PreviewMode;
@@ -311,6 +312,7 @@ export function Preview({
   jigColor: string;
   resetToken: number;
   onMove: (label: string, dx: number, dy: number) => void;
+  meshPreview?: { mesh: Tri[]; w: number; h: number; solidH: number; title: string } | null;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const cubeRef = useRef<HTMLCanvasElement>(null);
@@ -326,8 +328,8 @@ export function Preview({
     x: 0,
     y: 0,
   });
-  const latest = useRef({ result, mode, showNum, jigColor, onMove });
-  latest.current = { result, mode, showNum, jigColor, onMove };
+  const latest = useRef({ result, mode, showNum, jigColor, onMove, meshPreview });
+  latest.current = { result, mode, showNum, jigColor, onMove, meshPreview };
 
   const paintRef = useRef<() => void>(() => {});
 
@@ -379,7 +381,7 @@ export function Preview({
     };
 
     const paint = () => {
-      const { result, mode, showNum, jigColor } = latest.current;
+      const { result, mode, showNum, jigColor, meshPreview } = latest.current;
       const dpr = window.devicePixelRatio || 1;
       const { W, H } = measure();
       canvas.width = Math.max(1, Math.round(W * dpr));
@@ -414,6 +416,7 @@ export function Preview({
           jigColor,
           dpr,
           drag.current.kind === "orbit",
+          meshPreview,
         );
         cube.current = cubeCanvas ? paintViewCube(cubeCanvas, view3.current.az, view3.current.ax, dpr) : null;
         return;
@@ -608,7 +611,7 @@ export function Preview({
 
   useEffect(() => {
     paintRef.current();
-  }, [result, mode, showNum, jigColor]);
+  }, [result, mode, showNum, jigColor, meshPreview]);
 
   useEffect(() => {
     if (snap.current != null) cancelAnimationFrame(snap.current);

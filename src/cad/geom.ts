@@ -258,3 +258,79 @@ export function mergeCollinear(loop: Loop, eps = 1e-7): Loop {
   }
   return pts;
 }
+
+/** Right-hand normal of a CCW edge: points outward. */
+function outwardNormal(a: Pt, b: Pt): Pt {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const len = Math.hypot(dx, dy) || 1;
+  return [dy / len, -dx / len];
+}
+
+/**
+ * Offset a closed loop. Positive distance grows it (outward for a CCW ring).
+ * One output vertex per input vertex so a chamfer can pair mouth and seat.
+ */
+export function offsetLoop(loop: Loop, distance: number): Loop | null {
+  if (!Number.isFinite(distance)) return null;
+  const pts = ensureCCW(cleanLoop(loop, 1e-7));
+  if (pts.length < 3) return null;
+  if (Math.abs(distance) < 1e-9) return pts;
+  const n = pts.length;
+  const out: Loop = [];
+  const limit = Math.max(0.25, Math.abs(distance) * 4);
+  for (let i = 0; i < n; i++) {
+    const prev = pts[(i + n - 1) % n];
+    const cur = pts[i];
+    const next = pts[(i + 1) % n];
+    const n0 = outwardNormal(prev, cur);
+    const n1 = outwardNormal(cur, next);
+    let bx = n0[0] + n1[0];
+    let by = n0[1] + n1[1];
+    const bl = Math.hypot(bx, by);
+    if (bl < 1e-9) {
+      out.push([cur[0] + n1[0] * distance, cur[1] + n1[1] * distance]);
+      continue;
+    }
+    bx /= bl;
+    by /= bl;
+    const denom = bx * n1[0] + by * n1[1];
+    let mag = Math.abs(denom) < 1e-4 ? Math.sign(distance || 1) * limit : distance / denom;
+    if (Math.abs(mag) > limit) mag = Math.sign(mag) * limit;
+    out.push([cur[0] + bx * mag, cur[1] + by * mag]);
+  }
+  return out.length >= 3 ? out : null;
+}
+
+export function pointSegDistance(p: Pt, a: Pt, b: Pt): number {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const len2 = dx * dx + dy * dy;
+  if (len2 < 1e-16) return Math.hypot(p[0] - a[0], p[1] - a[1]);
+  let t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+}
+
+/** True when non-adjacent edges cross. A chamfer mouth that does this is dropped. */
+export function loopSelfIntersects(loop: Loop): boolean {
+  const n = loop.length;
+  if (n < 4) return false;
+  const cross = (a: Pt, b: Pt, c: Pt, d: Pt) => {
+    const r = (p: Pt, q: Pt, s: Pt) => (q[0] - p[0]) * (s[1] - p[1]) - (q[1] - p[1]) * (s[0] - p[0]);
+    const d1 = r(c, d, a);
+    const d2 = r(c, d, b);
+    const d3 = r(a, b, c);
+    const d4 = r(a, b, d);
+    return ((d1 > 1e-9 && d2 < -1e-9) || (d1 < -1e-9 && d2 > 1e-9)) && ((d3 > 1e-9 && d4 < -1e-9) || (d3 < -1e-9 && d4 > 1e-9));
+  };
+  for (let i = 0; i < n; i++) {
+    const a = loop[i];
+    const b = loop[(i + 1) % n];
+    for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue;
+      if (cross(a, b, loop[j], loop[(j + 1) % n])) return true;
+    }
+  }
+  return false;
+}

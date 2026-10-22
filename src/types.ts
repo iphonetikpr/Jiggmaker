@@ -6,6 +6,8 @@ export type UpAxis = "z+" | "z-" | "y+" | "y-" | "x+" | "x-";
 export type HolesMode = "none" | "template" | "jig" | "all";
 export type StepId = "setup" | "layout" | "output";
 export type PreviewMode = "template" | "jig3d" | "laserPocket" | "laserBase";
+/** Fit-test strip material. Clearances live in FIT_CLEARANCE. */
+export type FitMaterial = "pla" | "petg" | "resin";
 
 export type Pt = [number, number];
 export type Loop = Pt[];
@@ -46,6 +48,8 @@ export interface JobSettings {
   paintSafeInset: number;
   paintSafeW: number;
   paintSafeH: number;
+  /** Fit-test strip material. Stored with the preset. */
+  material: FitMaterial;
 }
 
 export interface JobObject {
@@ -167,6 +171,8 @@ export interface MeshPocket {
   loops: Loop[];
   holes?: Loop[];
   pick?: { cx: number; cy: number; r: number } | null;
+  /** Cavity depth from the top face. Omit to use the plate pocket depth. */
+  depth?: number;
 }
 
 export interface JigResult {

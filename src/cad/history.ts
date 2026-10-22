@@ -37,6 +37,7 @@ export function defaultSettings(): JobSettings {
     paintSafeInset: DEFAULTS.paintSafeInset,
     paintSafeW: DEFAULTS.paintSafeW,
     paintSafeH: DEFAULTS.paintSafeH,
+    material: "pla",
   };
 }
 
@@ -93,6 +94,7 @@ export function serializeJob(
   rec.paintSafeInset = settings.paintSafeInset;
   rec.paintSafeW = settings.paintSafeW;
   rec.paintSafeH = settings.paintSafeH;
+  rec.material = settings.material;
 
   return {
     id: "h" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
@@ -150,6 +152,7 @@ export function applyHistorySettings(raw: Record<string, unknown> | HistoryJob["
     if (k === "bed" && (v === "333x88" || v === "333x418" || v === "custom")) s.bed = v;
     else if (k === "footprint" && (v === "bed" || v === "tight")) s.footprint = v;
     else if (k === "paintSafeMode" && (v === "inset" || v === "fixed")) s.paintSafeMode = v;
+    else if (k === "material" && (v === "pla" || v === "petg" || v === "resin")) s.material = v;
     else if (numKeys.has(k) && k in s) (s as unknown as Record<string, number>)[k] = typeof v === "number" ? v : parseFloat(String(v));
     else if (boolKeys.has(k) && k in s) {
       (s as unknown as Record<string, boolean>)[k] = v === true || v === "true";

@@ -24,6 +24,7 @@ describe("presets", () => {
     expect(defaults.settings.pocketDepth).toBe(DEFAULTS.pocketDepth);
     expect(defaults.objects[0].up).toBe("z+");
     expect(defaults.objects[0].clear).toBe(DEFAULTS.clearance);
+    expect(defaults.settings.material).toBe("pla");
   });
 
   it("saves, lists, renames, and deletes user presets without touching Defaults", () => {
@@ -49,6 +50,9 @@ describe("presets", () => {
     saveUserPresets(store, []);
     expect(listPresets(store)).toHaveLength(1);
     expect(listPresets(store)[0].readonly).toBe(true);
+
+    saveUserPresets(store, [capturePreset("PETG", { ...defaultSettings(), material: "petg" }, [newObject(0)])]);
+    expect(listPresets(store)[1].settings.material).toBe("petg");
   });
 
   it("flags drift from the loaded preset and applies object params without geometry", () => {
