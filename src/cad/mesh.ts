@@ -1,7 +1,7 @@
 import earcut from "earcut";
 import { POCKET_DEPTH_EXTRA, SCALE_COMP } from "../constants";
 import type { Loop, MeshPocket, Pt, Tri } from "../types";
-import { circleLoop, ensureCCW, ensureCW, polyArea } from "./geom";
+import { circleLoop, ensureCCW, ensureCW, loopSelfIntersects, offsetLoop, polyArea } from "./geom";
 
 function flatten(outer: Loop, holes: Loop[]): { vertices: number[]; holeIndices: number[] } {
   const vertices: number[] = [];
@@ -150,10 +150,35 @@ export function meshNonManifoldEdges(tris: Tri[]): number {
   return bad;
 }
 
-type ShallowCavity = { loop: Loop; floorZ: number; through: boolean; picks: Loop[]; pickWalls: boolean };
+type Cavity = {
+  mouth: Loop;
+  seat: Loop;
+  floorZ: number;
+  seatZ: number;
+  through: boolean;
+  picks: Loop[];
+  pickWalls: boolean;
+};
 
-/** Earcut drops vertices when separate holes share one line. A tiny rotation keeps the engraved strip manifold. */
-function separateLoops(loops: Loop[]): Loop[] {
+/** Sloped 45° band from the wider mouth down to the clearance seat. */
+function chamferWalls(out: Tri[], mouth: Loop, seat: Loop, topZ: number, seatZ: number) {
+  const n = Math.min(mouth.length, seat.length);
+  for (let i = 0; i < n; i++) {
+    const a0 = seat[i];
+    const b0 = seat[(i + 1) % n];
+    const a1 = mouth[i];
+    const b1 = mouth[(i + 1) % n];
+    pushTri(out, a0[0], a0[1], seatZ, b1[0], b1[1], topZ, b0[0], b0[1], seatZ);
+    pushTri(out, a0[0], a0[1], seatZ, a1[0], a1[1], topZ, b1[0], b1[1], topZ);
+  }
+}
+
+/**
+ * Earcut deletes vertices when separate holes share one straight line, and the
+ * cap then no longer matches the walls. A tiny per-cavity rotation keeps every
+ * edge off its neighbor's line without moving the clearance by a printable amount.
+ */
+function separateCavities(cavities: Cavity[]) {
   const spin = (loop: Loop, ang: number, cx: number, cy: number): Loop => {
     const c = Math.cos(ang);
     const s = Math.sin(ang);
@@ -163,22 +188,37 @@ function separateLoops(loops: Loop[]): Loop[] {
       return [cx + dx * c - dy * s, cy + dx * s + dy * c] as Pt;
     });
   };
-  return loops.map((loop, i) => {
-    if (loop.length < 3) return loop;
+  cavities.forEach((cavity, i) => {
+    if (cavity.seat.length < 3) return;
     let cx = 0;
     let cy = 0;
-    for (const [x, y] of loop) {
+    for (const [x, y] of cavity.seat) {
       cx += x;
       cy += y;
     }
-    cx /= loop.length;
-    cy /= loop.length;
-    return spin(loop, (i + 1) * 2e-4, cx, cy);
+    cx /= cavity.seat.length;
+    cy /= cavity.seat.length;
+    const ang = (i + 1) * 2e-4;
+    cavity.seat = spin(cavity.seat, ang, cx, cy);
+    cavity.mouth = spin(cavity.mouth, ang, cx, cy);
   });
 }
 
-/** Plate with at least one shallow cavity (fit-test labels). Job plates without `depth` stay on the original path. */
-function extrudeWithDepth(
+function cavityOf(loop: Loop, leadIn: number, topZ: number, floorZ: number, through: boolean): Cavity {
+  const seat = ensureCCW(loop);
+  let lead = Math.max(0, leadIn);
+  const room = topZ - (through ? 0 : floorZ);
+  if (lead > room - 0.15) lead = Math.max(0, room - 0.15);
+  let mouth = seat;
+  if (lead > 0.02) {
+    const grown = offsetLoop(seat, lead);
+    if (grown && grown.length === seat.length && !loopSelfIntersects(grown)) mouth = ensureCCW(grown);
+    else lead = 0;
+  }
+  return { mouth, seat, floorZ: through ? 0 : floorZ, seatZ: topZ - lead, through, picks: [], pickWalls: false };
+}
+
+export function extrudePlate(
   outer: Loop,
   pockets: PocketSpec[],
   baseThk: number,
@@ -189,7 +229,8 @@ function extrudeWithDepth(
   const extra = throughPlate ? 0 : POCKET_DEPTH_EXTRA;
   const topZ = solidHeight(baseThk, pocketDepth);
   const defaultFloor = throughPlate ? 0 : Math.max(0, baseThk - extra);
-  const cavities: ShallowCavity[] = [];
+
+  const cavities: Cavity[] = [];
   const pickHoles: Loop[] = [];
   for (const p of pockets) {
     const picks = p.pick && p.pick.r > 0.2 ? [circleLoop(p.pick.cx, p.pick.cy, p.pick.r, 20)] : [];
@@ -197,92 +238,41 @@ function extrudeWithDepth(
     const floorZ = explicit ? Math.max(0.05, topZ - p.depth!) : defaultFloor;
     const openThrough = !explicit && throughPlate;
     let first = true;
-    for (const loop of p.loops) {
-      if (!loop || loop.length < 3) continue;
-      cavities.push({
-        loop: ensureCCW(loop),
-        floorZ: openThrough ? 0 : floorZ,
-        through: openThrough,
-        picks: explicit ? [] : picks,
-        pickWalls: !explicit && first,
-      });
+    p.loops.forEach((loop, i) => {
+      if (!loop || loop.length < 3) return;
+      const cavity = cavityOf(loop, p.leadIns?.[i] ?? p.leadIn ?? 0, topZ, floorZ, openThrough);
+      if (!explicit) {
+        cavity.picks = picks;
+        cavity.pickWalls = first;
+      }
       first = false;
-    }
+      cavities.push(cavity);
+    });
     if (!explicit && !openThrough) {
       for (const hole of picks) pickHoles.push(hole);
     }
   }
-  const separated = separateLoops(cavities.map((c) => c.loop));
-  cavities.forEach((c, i) => {
-    c.loop = separated[i];
-  });
-  const mouths = cavities.map((c) => c.loop);
-  const bottomHoles = throughPlate ? cavities.filter((c) => c.through).map((c) => c.loop) : pickHoles;
-  const out: Tri[] = [];
-  cap(out, outer, mouths, topZ, true);
-  cap(out, outer, bottomHoles, 0, false);
-  ringWalls(out, outer, 0, topZ, true);
-  for (const c of cavities) {
-    if (c.through) {
-      ringWalls(out, c.loop, 0, topZ, false);
-    } else {
-      cap(out, c.loop, c.picks, c.floorZ, true);
-      ringWalls(out, c.loop, c.floorZ, topZ, false);
-      if (c.pickWalls) {
-        for (const hole of c.picks) ringWalls(out, hole, 0, c.floorZ, false);
-      }
-    }
-  }
-  const xf = plateMeshXform(outer, scaleComp);
-  applyMeshXform(out, xf);
-  return out;
-}
 
-export function extrudePlate(
-  outer: Loop,
-  pockets: PocketSpec[],
-  baseThk: number,
-  pocketDepth: number,
-  scaleComp: boolean,
-): Tri[] {
-  if (pockets.some((p) => typeof p.depth === "number" && p.depth > 0)) {
-    return extrudeWithDepth(outer, pockets, baseThk, pocketDepth, scaleComp);
-  }
-  const through = baseThk <= 0;
-  const extra = through ? 0 : POCKET_DEPTH_EXTRA;
-  const topZ = solidHeight(baseThk, pocketDepth);
-  const floorZ = through ? 0 : Math.max(0, baseThk - extra);
-
-  const inners: Loop[] = [];
-  const pickHoles: Loop[] = [];
-  for (const p of pockets) {
-    for (const loop of p.loops) {
-      if (loop.length >= 3) inners.push(loop);
-    }
-    if (p.pick && p.pick.r > 0.2) pickHoles.push(circleLoop(p.pick.cx, p.pick.cy, p.pick.r, 20));
-  }
+  separateCavities(cavities);
+  const mouths = cavities.map((c) => c.mouth);
+  const bottomHoles = throughPlate ? cavities.filter((c) => c.through).map((c) => c.seat) : pickHoles;
 
   const out: Tri[] = [];
   // Always cut pocket openings in the top — a solid lid z-fights and hides
   // pockets when the 3D preview orbits (painter's algorithm + backfaces).
-  cap(out, outer, inners, topZ, true);
-  cap(out, outer, through ? inners : pickHoles, 0, false);
+  cap(out, outer, mouths, topZ, true);
+  cap(out, outer, bottomHoles, 0, false);
   ringWalls(out, outer, 0, topZ, true);
 
-  for (const p of pockets) {
-    const picks = p.pick && p.pick.r > 0.2 ? [circleLoop(p.pick.cx, p.pick.cy, p.pick.r, 20)] : [];
-    for (const pocket of p.loops) {
-      if (!pocket || pocket.length < 3) continue;
-      if (through) {
-        ringWalls(out, pocket, 0, topZ, false);
-      } else {
-        cap(out, pocket, picks, floorZ, true);
-        ringWalls(out, pocket, floorZ, topZ, false);
-      }
-    }
-    if (!through) {
-      for (const hole of picks) {
-        ringWalls(out, hole, 0, floorZ, false);
+  for (const c of cavities) {
+    if (c.seatZ < topZ - 1e-4) chamferWalls(out, c.mouth, c.seat, topZ, c.seatZ);
+    if (c.through) {
+      ringWalls(out, c.seat, 0, c.seatZ, false);
+    } else {
+      cap(out, c.seat, c.picks, c.floorZ, true);
+      ringWalls(out, c.seat, c.floorZ, c.seatZ, false);
+      if (c.pickWalls) {
+        for (const hole of c.picks) ringWalls(out, hole, 0, c.floorZ, false);
       }
     }
   }

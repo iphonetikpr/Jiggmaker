@@ -169,6 +169,8 @@ export default function App() {
       o.auto = !!raw.auto;
       o.mode = raw.mode === "rectangle" ? "rectangle" : "silhouette";
       o.clear = raw.clear ?? DEFAULTS.clearance;
+      o.notch = raw.notch === true;
+      o.leadIn = raw.leadIn == null ? true : raw.leadIn === true;
       o.holes = (raw.holes as JobObject["holes"]) || "none";
       o.stlName = raw.stlName || null;
       o.rectW = raw.rectW ?? DEFAULTS.rectW;
@@ -686,6 +688,7 @@ export default function App() {
         <div className="workspace">
         <div className="preview-col">
           {result.warn && <div className="warnbar">{result.warn}</div>}
+          {result.notchWarn && <div className="warnbar">{result.notchWarn}</div>}
           <div className="preview-card">
             <div className="preview-hd">
               <b>Preview</b>

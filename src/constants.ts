@@ -151,4 +151,14 @@ export const TEST_STRIP = {
   labelGap: 1.5,
 } as const;
 
+/** Semicircle diameter on the pocket's longest side. */
+export const FINGER_NOTCH_DIA = 14;
+/** Skip the notch when the remaining wall to another pocket would be under this. */
+export const FINGER_NOTCH_MIN_WALL = 1.5;
+/** 45° mouth chamfer. Horizontal offset equals this depth. */
+export const LEAD_IN_MM = 0.6;
+/** Used when the pocket's narrower side is under LEAD_IN_NARROW_BELOW. */
+export const LEAD_IN_NARROW_MM = 0.3;
+export const LEAD_IN_NARROW_BELOW = 4;
+
 export const SPLIT_TAB_INSET = 14;

@@ -162,6 +162,18 @@ export function ObjectCard({
           aria-label="Clearance mm"
         />
       </div>
+      <label className="chk">
+        <input type="checkbox" checked={obj.notch} onChange={(e) => onChange({ notch: e.target.checked })} />
+        Finger notch Ø14
+      </label>
+      <label className="chk">
+        <input type="checkbox" checked={obj.leadIn} onChange={(e) => onChange({ leadIn: e.target.checked })} />
+        Lead-in 45°
+      </label>
+      <p className="hint">
+        Notch: semicírculo en el lado más largo, profundidad del pocket. Se omite si la pared con el vecino baja de 1.5 mm.
+        Lead-in: 0.6 mm en la boca (0.3 mm si el slot mide &lt; 4 mm). El clearance bajo el chaflán no cambia.
+      </p>
       <div className="row">
         <label>Agujeros pieza</label>
         <select value={obj.holes} onChange={(e) => onChange({ holes: e.target.value as JobObject["holes"] })}>
