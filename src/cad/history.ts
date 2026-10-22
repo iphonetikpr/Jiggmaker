@@ -120,7 +120,7 @@ export function serializeJob(
   };
 }
 
-export function applyHistorySettings(raw: Record<string, unknown> | HistoryJob["settings"]): JobSettings {
+export function applyHistorySettings(raw: Record<string, unknown> | HistoryJob["settings"] | JobSettings): JobSettings {
   const s = defaultSettings();
   const numKeys = new Set([
     "bedW",
