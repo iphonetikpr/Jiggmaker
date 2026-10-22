@@ -123,4 +123,32 @@ export const SPLIT_HOLE_DIA_MIN = 3.2;
 export const SPLIT_HOLE_DIA_MAX = 3.3;
 /** 0.25 mm clearance on the Ø3.0 pin — inside the 3.2–3.3 window. */
 export const SPLIT_HOLE_DIA = 3.25;
+
+/**
+ * Fit-test strip: three per-side silhouette offsets, one material table.
+ * Retune only this table. Labels are the values with a leading dot (`.15`).
+ */
+export const FIT_CLEARANCE = {
+  pla: [0.15, 0.25, 0.35],
+  petg: [0.2, 0.3, 0.4],
+  resin: [0.05, 0.1, 0.15],
+} as const;
+
+export const TEST_STRIP = {
+  /** Gap between pocket outlines. */
+  gap: 5,
+  /** Tight margin around pockets and labels. */
+  margin: 2,
+  /** Strip base, independent of the job base. */
+  base: 2,
+  /** Crop when the part's largest side exceeds this. */
+  cropAbove: 50,
+  /** Corner window used for that crop. */
+  crop: 40,
+  labelHeight: 4,
+  labelDepth: 0.6,
+  /** Space between a pocket outline and its label. */
+  labelGap: 1.5,
+} as const;
+
 export const SPLIT_TAB_INSET = 14;

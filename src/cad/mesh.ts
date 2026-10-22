@@ -1,6 +1,6 @@
 import earcut from "earcut";
 import { POCKET_DEPTH_EXTRA, SCALE_COMP } from "../constants";
-import type { Loop, MeshPocket, Tri } from "../types";
+import type { Loop, MeshPocket, Pt, Tri } from "../types";
 import { circleLoop, ensureCCW, ensureCW, polyArea } from "./geom";
 
 function flatten(outer: Loop, holes: Loop[]): { vertices: number[]; holeIndices: number[] } {
@@ -150,6 +150,94 @@ export function meshNonManifoldEdges(tris: Tri[]): number {
   return bad;
 }
 
+type ShallowCavity = { loop: Loop; floorZ: number; through: boolean; picks: Loop[]; pickWalls: boolean };
+
+/** Earcut drops vertices when separate holes share one line. A tiny rotation keeps the engraved strip manifold. */
+function separateLoops(loops: Loop[]): Loop[] {
+  const spin = (loop: Loop, ang: number, cx: number, cy: number): Loop => {
+    const c = Math.cos(ang);
+    const s = Math.sin(ang);
+    return loop.map(([x, y]) => {
+      const dx = x - cx;
+      const dy = y - cy;
+      return [cx + dx * c - dy * s, cy + dx * s + dy * c] as Pt;
+    });
+  };
+  return loops.map((loop, i) => {
+    if (loop.length < 3) return loop;
+    let cx = 0;
+    let cy = 0;
+    for (const [x, y] of loop) {
+      cx += x;
+      cy += y;
+    }
+    cx /= loop.length;
+    cy /= loop.length;
+    return spin(loop, (i + 1) * 2e-4, cx, cy);
+  });
+}
+
+/** Plate with at least one shallow cavity (fit-test labels). Job plates without `depth` stay on the original path. */
+function extrudeWithDepth(
+  outer: Loop,
+  pockets: PocketSpec[],
+  baseThk: number,
+  pocketDepth: number,
+  scaleComp: boolean,
+): Tri[] {
+  const throughPlate = baseThk <= 0;
+  const extra = throughPlate ? 0 : POCKET_DEPTH_EXTRA;
+  const topZ = solidHeight(baseThk, pocketDepth);
+  const defaultFloor = throughPlate ? 0 : Math.max(0, baseThk - extra);
+  const cavities: ShallowCavity[] = [];
+  const pickHoles: Loop[] = [];
+  for (const p of pockets) {
+    const picks = p.pick && p.pick.r > 0.2 ? [circleLoop(p.pick.cx, p.pick.cy, p.pick.r, 20)] : [];
+    const explicit = typeof p.depth === "number" && p.depth > 0;
+    const floorZ = explicit ? Math.max(0.05, topZ - p.depth!) : defaultFloor;
+    const openThrough = !explicit && throughPlate;
+    let first = true;
+    for (const loop of p.loops) {
+      if (!loop || loop.length < 3) continue;
+      cavities.push({
+        loop: ensureCCW(loop),
+        floorZ: openThrough ? 0 : floorZ,
+        through: openThrough,
+        picks: explicit ? [] : picks,
+        pickWalls: !explicit && first,
+      });
+      first = false;
+    }
+    if (!explicit && !openThrough) {
+      for (const hole of picks) pickHoles.push(hole);
+    }
+  }
+  const separated = separateLoops(cavities.map((c) => c.loop));
+  cavities.forEach((c, i) => {
+    c.loop = separated[i];
+  });
+  const mouths = cavities.map((c) => c.loop);
+  const bottomHoles = throughPlate ? cavities.filter((c) => c.through).map((c) => c.loop) : pickHoles;
+  const out: Tri[] = [];
+  cap(out, outer, mouths, topZ, true);
+  cap(out, outer, bottomHoles, 0, false);
+  ringWalls(out, outer, 0, topZ, true);
+  for (const c of cavities) {
+    if (c.through) {
+      ringWalls(out, c.loop, 0, topZ, false);
+    } else {
+      cap(out, c.loop, c.picks, c.floorZ, true);
+      ringWalls(out, c.loop, c.floorZ, topZ, false);
+      if (c.pickWalls) {
+        for (const hole of c.picks) ringWalls(out, hole, 0, c.floorZ, false);
+      }
+    }
+  }
+  const xf = plateMeshXform(outer, scaleComp);
+  applyMeshXform(out, xf);
+  return out;
+}
+
 export function extrudePlate(
   outer: Loop,
   pockets: PocketSpec[],
@@ -157,6 +245,9 @@ export function extrudePlate(
   pocketDepth: number,
   scaleComp: boolean,
 ): Tri[] {
+  if (pockets.some((p) => typeof p.depth === "number" && p.depth > 0)) {
+    return extrudeWithDepth(outer, pockets, baseThk, pocketDepth, scaleComp);
+  }
   const through = baseThk <= 0;
   const extra = through ? 0 : POCKET_DEPTH_EXTRA;
   const topZ = solidHeight(baseThk, pocketDepth);
