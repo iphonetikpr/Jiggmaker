@@ -1,10 +1,12 @@
 import { FRAME_PLATE } from "../constants";
 import type { BedSize, Entity, JobObject, JobSettings, JigResult, Loop, PlacedPiece } from "../types";
-import { rectLoop, roundedRectLoop, translateLoop } from "./geom";
+import { bboxOf, rectLoop, roundedRectLoop, translateLoop } from "./geom";
 import { applyMoves, footprintOf, packObjects } from "./layout";
 import { extrudePlate, plateMeshXform, solidHeight } from "./mesh";
 import { bedFromSettings, plateLabel } from "./filename";
 import { paintSafeGuideEntity, paintSafeLoops, templateOuterLoops } from "./paintSafe";
+import { leadInDepth } from "./leadIn";
+import { applyFingerNotches } from "./notch";
 import { prepareObject } from "./prepare";
 import { planPlateSplits } from "./split";
 
@@ -47,6 +49,11 @@ export function generateJig(
   const pocketDepth = settings.pocketDepth;
   const pack = packObjects(prepped, bed.w, bed.h, settings);
   applyMoves(pack.placed, moves, bed.w, bed.h);
+  const notchWarnings = applyFingerNotches(
+    pack.placed,
+    objects.map((o) => !!o.notch),
+    bed,
+  );
 
   let jigW = bed.w;
   let jigH = bed.h;
@@ -65,7 +72,21 @@ export function generateJig(
     plateDy = frameDy;
   } else if (settings.footprint === "tight" && placed.length) {
     // Crop only the printed plate. `placed` stays in bed mm so the template matches Full bed.
-    const b = footprintOf(placed);
+    // A finger notch sticks out of the part cell, so the crop follows it.
+    const cells = footprintOf(placed);
+    const loops = bboxOf(placed.flatMap((p) => p.loops));
+    const notchGrew =
+      loops.minX < cells.minX - 0.5 ||
+      loops.minY < cells.minY - 0.5 ||
+      loops.maxX > cells.maxX + 0.5 ||
+      loops.maxY > cells.maxY + 0.5;
+    const b = notchGrew
+      ? { minX: Math.min(cells.minX, loops.minX), minY: Math.min(cells.minY, loops.minY), maxX: Math.max(cells.maxX, loops.maxX), maxY: Math.max(cells.maxY, loops.maxY), w: 0, h: 0 }
+      : cells;
+    if (notchGrew) {
+      b.w = b.maxX - b.minX;
+      b.h = b.maxY - b.minY;
+    }
     const hostW = frameOn ? FRAME_PLATE.w : bed.w;
     const hostH = frameOn ? FRAME_PLATE.h : bed.h;
     const hostOx = frameOn ? frameDx : 0;
@@ -181,13 +202,18 @@ export function generateJig(
   });
   templateEntities.push({ type: "text", layer: "REG", x: 12, y: 4, text: "0,0", size: 4 });
 
-  const meshPockets = placed.map((p) => ({
-    loops: plateLoops(p),
-    holes: p.hmode === "jig" || p.hmode === "all" ? plateHoles(p) : [],
-    pick: settings.pickOut
-      ? { cx: p.cx + plateDx, cy: p.cy + plateDy, r: settings.pickDia / 2 }
-      : null,
-  }));
+  const meshPockets = placed.map((p) => {
+    const loops = plateLoops(p);
+    const leadOn = objects[p.obj]?.leadIn !== false;
+    const leadIns = loops.map((loop) => leadInDepth(loop, leadOn));
+    return {
+      loops,
+      holes: p.hmode === "jig" || p.hmode === "all" ? plateHoles(p) : [],
+      pick: settings.pickOut ? { cx: p.cx + plateDx, cy: p.cy + plateDy, r: settings.pickDia / 2 } : null,
+      leadIn: leadIns[0] ?? 0,
+      leadIns,
+    };
+  });
 
   const meshXform = plateMeshXform(outer, settings.scaleComp);
   const mesh = extrudePlate(outer, meshPockets, settings.baseThk, pocketDepth, settings.scaleComp);
@@ -241,6 +267,7 @@ export function generateJig(
     meshPockets,
     baseThk: settings.baseThk,
     pocketDepth,
+    notchWarn: notchWarnings.length ? notchWarnings.join(" ") : null,
   };
 }
 

@@ -6,6 +6,8 @@ export type UpAxis = "z+" | "z-" | "y+" | "y-" | "x+" | "x-";
 export type HolesMode = "none" | "template" | "jig" | "all";
 export type StepId = "setup" | "layout" | "output";
 export type PreviewMode = "template" | "jig3d" | "laserPocket" | "laserBase";
+/** Fit-test strip material. Clearances live in FIT_CLEARANCE. */
+export type FitMaterial = "pla" | "petg" | "resin";
 
 export type Pt = [number, number];
 export type Loop = Pt[];
@@ -46,6 +48,8 @@ export interface JobSettings {
   paintSafeInset: number;
   paintSafeW: number;
   paintSafeH: number;
+  /** Fit-test strip material. Stored with the preset. */
+  material: FitMaterial;
 }
 
 export interface JobObject {
@@ -58,6 +62,10 @@ export interface JobObject {
   auto: boolean;
   mode: PocketMode;
   clear: number;
+  /** Semicircle Ø14 on the pocket's longest side. Off until the user turns it on. */
+  notch: boolean;
+  /** 45° mouth chamfer. On by default. Does not change the clearance below the chamfer. */
+  leadIn: boolean;
   holes: HolesMode;
   stlName: string | null;
   stl: string | null;
@@ -79,6 +87,8 @@ export interface HistoryJob {
     auto: boolean;
     mode: string;
     clear: number;
+    notch?: boolean;
+    leadIn?: boolean;
     holes: string;
     stlName: string;
     stl?: string;
@@ -167,6 +177,12 @@ export interface MeshPocket {
   loops: Loop[];
   holes?: Loop[];
   pick?: { cx: number; cy: number; r: number } | null;
+  /** Cavity depth from the top face. Omit to use the plate pocket depth. */
+  depth?: number;
+  /** 45° flare at the mouth, in mm. The seat loop below it stays the clearance size. */
+  leadIn?: number;
+  /** Per-loop flare, parallel to `loops`. Falls back to `leadIn`. */
+  leadIns?: number[];
 }
 
 export interface JigResult {
@@ -213,4 +229,6 @@ export interface JigResult {
   meshPockets: MeshPocket[];
   baseThk: number;
   pocketDepth: number;
+  /** Finger notches skipped because the wall to a neighbor would be under 1.5 mm. */
+  notchWarn: string | null;
 }

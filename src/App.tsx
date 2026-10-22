@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DEFAULTS, HISTORY_FILENAME, HISTORY_KEY, MAX_OBJECTS } from "./constants";
+import { DEFAULTS, FIT_CLEARANCE, HISTORY_FILENAME, HISTORY_KEY, MAX_OBJECTS, TEST_STRIP } from "./constants";
 import {
   BUILTIN_DEFAULTS_ID,
   applyObjectParams,
@@ -12,7 +12,8 @@ import {
 import { materializeProject, parseProject, projectFilename, serializeProject } from "./cad/projectFile";
 import { browserStore } from "./storage/store";
 import { generateJig } from "./cad/generate";
-import { solidHeight } from "./cad/mesh";
+import { solidHeight, toBinarySTL } from "./cad/mesh";
+import { buildTestStrip, fitClearances, fitLabel, testStripFilename } from "./cad/testStrip";
 import {
   applyHistorySettings,
   b64ToBytes,
@@ -36,7 +37,7 @@ import {
 } from "./cad/export";
 import { renderTemplatePng } from "./cad/png";
 import { parseSTL } from "./cad/stl";
-import type { HistoryJob, JobObject, JobSettings, PreviewMode, StepId } from "./types";
+import type { FitMaterial, HistoryJob, JobObject, JobSettings, PreviewMode, StepId, Tri } from "./types";
 import { NumberField } from "./ui/NumberField";
 import { ObjectCard } from "./ui/ObjectCard";
 import { PaintSafeFields } from "./ui/PaintSafeFields";
@@ -67,6 +68,7 @@ export default function App() {
   const [activePresetId, setActivePresetId] = useState<string | null>(BUILTIN_DEFAULTS_ID);
   const [presetDraft, setPresetDraft] = useState("");
   const [projectName, setProjectName] = useState<string | null>(null);
+  const [stripView, setStripView] = useState<{ mesh: Tri[]; w: number; h: number; solidH: number; title: string } | null>(null);
 
   useEffect(() => {
     setHistory(loadHistory());
@@ -80,6 +82,37 @@ export default function App() {
   const presetDirty = activePreset ? presetDiffers(activePreset, settings, objects) : false;
 
   const stem = baseName(result, objects[0]?.name || "jig");
+  const stripChoices = fitClearances(settings.material);
+
+  const exportTestStrip = () => {
+    const obj = objects[0];
+    if (!obj) return;
+    const strip = buildTestStrip(obj, stlMap[obj.id] || null, settings.pocketDepth, settings.material);
+    const name = obj.name || obj.stlName || "parte";
+    downloadBytes(testStripFilename(name, settings.material), toBinarySTL(strip.mesh), "model/stl");
+    setStripView({
+      mesh: strip.mesh,
+      w: strip.w,
+      h: strip.h,
+      solidH: strip.solidH,
+      title: `Tira de ajuste · ${settings.material === "resin" ? "Resina" : settings.material.toUpperCase()} · base ${TEST_STRIP.base} mm · pocket ${settings.pocketDepth} mm`,
+    });
+    setPreview("jig3d");
+    setViewReset((n) => n + 1);
+  };
+
+  const useWinningClearance = (value: number) => {
+    setObjects((list) => list.map((o, i) => (i === 0 ? { ...o, clear: value } : o)));
+    if (!activePreset || activePreset.readonly) return;
+    const user = presets
+      .filter((p) => !p.readonly)
+      .map((p) =>
+        p.id === activePreset.id
+          ? { ...p, objects: p.objects.map((op, i) => (i === 0 ? { ...op, clear: value } : op)) }
+          : p,
+      );
+    persistPresets(user);
+  };
 
   const onStl = async (id: string, file: File) => {
     const buf = await file.arrayBuffer();
@@ -136,6 +169,8 @@ export default function App() {
       o.auto = !!raw.auto;
       o.mode = raw.mode === "rectangle" ? "rectangle" : "silhouette";
       o.clear = raw.clear ?? DEFAULTS.clearance;
+      o.notch = raw.notch === true;
+      o.leadIn = raw.leadIn == null ? true : raw.leadIn === true;
       o.holes = (raw.holes as JobObject["holes"]) || "none";
       o.stlName = raw.stlName || null;
       o.rectW = raw.rectW ?? DEFAULTS.rectW;
@@ -510,6 +545,37 @@ export default function App() {
                   Base = 0 → through-hole (sin suelo; no se aplica pocketDepthExtra 0.2). DXF/SVG no usan scaleComp.
                 </p>
                 <div className="row">
+                  <label htmlFor="fit-material">Material</label>
+                  <select
+                    id="fit-material"
+                    aria-label="Material"
+                    value={settings.material}
+                    onChange={(e) => patchSettings({ material: e.target.value as FitMaterial })}
+                  >
+                    <option value="pla">PLA</option>
+                    <option value="petg">PETG</option>
+                    <option value="resin">Resina</option>
+                  </select>
+                </div>
+                <div className="row">
+                  <button className="btn" type="button" onClick={exportTestStrip}>
+                    Test strip STL
+                  </button>
+                </div>
+                <div className="seg">
+                  {stripChoices.map((value) => (
+                    <button key={value} type="button" onClick={() => useWinningClearance(value)}>
+                      Usar {fitLabel(value)}
+                    </button>
+                  ))}
+                </div>
+                <p className="hint">
+                  Tira de ajuste: 3 pockets de la primera pieza, separados {TEST_STRIP.gap} mm, offsets{" "}
+                  {FIT_CLEARANCE[settings.material].map((v) => fitLabel(v)).join(" / ")} mm por lado. Base {TEST_STRIP.base} mm,
+                  pocket depth del job, tight con margen {TEST_STRIP.margin} mm. Si el lado mayor pasa de {TEST_STRIP.cropAbove} mm,
+                  recorta una esquina de {TEST_STRIP.crop}×{TEST_STRIP.crop} mm. Usar guarda el clearance en el preset activo.
+                </p>
+                <div className="row">
                   <label>maxPrintBed mm</label>
                   <NumberField min={100} step={1} value={settings.maxPrintBed} onChange={(maxPrintBed) => patchSettings({ maxPrintBed })} aria-label="maxPrintBed mm" />
                 </div>
@@ -622,6 +688,7 @@ export default function App() {
         <div className="workspace">
         <div className="preview-col">
           {result.warn && <div className="warnbar">{result.warn}</div>}
+          {result.notchWarn && <div className="warnbar">{result.notchWarn}</div>}
           <div className="preview-card">
             <div className="preview-hd">
               <b>Preview</b>
@@ -647,6 +714,11 @@ export default function App() {
                   </button>
                 ))}
               </div>
+              {preview === "jig3d" && stripView && (
+                <button className="ghost" type="button" onClick={() => setStripView(null)}>
+                  Ver jig
+                </button>
+              )}
               {preview === "jig3d" && (
                 <label className="jig-color">
                   color
@@ -663,6 +735,7 @@ export default function App() {
                   jigColor={jigColor}
                   resetToken={viewReset}
                   onMove={onMove}
+                  meshPreview={preview === "jig3d" ? stripView : null}
                 />
               </div>
               <div className="preview-ft">
