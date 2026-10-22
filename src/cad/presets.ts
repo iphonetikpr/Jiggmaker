@@ -11,6 +11,8 @@ export interface ObjectParams {
   auto: boolean;
   mode: PocketMode;
   clear: number;
+  notch: boolean;
+  leadIn: boolean;
   holes: HolesMode;
   count: number;
 }
@@ -36,6 +38,8 @@ export function defaultObjectParams(): ObjectParams {
     auto: false,
     mode: "rectangle",
     clear: DEFAULTS.clearance,
+    notch: false,
+    leadIn: true,
     holes: "none",
     count: DEFAULTS.qty,
   };
@@ -59,6 +63,8 @@ export function objectParamsOf(obj: JobObject): ObjectParams {
     auto: obj.auto,
     mode: obj.mode,
     clear: obj.clear,
+    notch: obj.notch,
+    leadIn: obj.leadIn,
     holes: obj.holes,
     count: obj.count,
   };
@@ -85,6 +91,8 @@ export function applyObjectParams(objects: JobObject[], params: ObjectParams[]):
       auto: p.auto,
       mode: p.mode,
       clear: p.clear,
+      notch: p.notch,
+      leadIn: p.leadIn,
       holes: p.holes,
       count: p.count,
     };
@@ -145,6 +153,8 @@ function objectParamsEqual(a: ObjectParams, b: ObjectParams): boolean {
     a.auto === b.auto &&
     a.mode === b.mode &&
     a.clear === b.clear &&
+    a.notch === b.notch &&
+    a.leadIn === b.leadIn &&
     a.holes === b.holes &&
     a.count === b.count
   );
@@ -186,6 +196,8 @@ function normalizeObjectParams(raw: unknown): ObjectParams | null {
     auto: rec.auto === true || rec.auto === "true",
     mode,
     clear,
+    notch: rec.notch === true || rec.notch === "true",
+    leadIn: rec.leadIn == null ? base.leadIn : rec.leadIn === true || rec.leadIn === "true",
     holes,
     count,
   };

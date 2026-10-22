@@ -118,6 +118,8 @@ export function materializeProject(project: ProjectDocument): ProjectResult<Mate
     o.auto = !!raw.auto;
     o.mode = raw.mode === "rectangle" ? "rectangle" : "silhouette";
     o.clear = typeof raw.clear === "number" ? raw.clear : o.clear;
+    o.notch = raw.notch === true;
+    o.leadIn = raw.leadIn == null ? true : raw.leadIn === true;
     o.holes = isHoles(raw.holes) ? raw.holes : "none";
     o.stlName = raw.stlName || null;
     o.rectW = raw.rectW ?? o.rectW;

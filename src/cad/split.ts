@@ -125,16 +125,21 @@ function pocketContains(pockets: MeshPocket[], x: number, y: number, pad: number
 function clipPockets(pockets: MeshPocket[], s: PlateSplit): MeshPocket[] {
   const out: MeshPocket[] = [];
   for (const p of pockets) {
-    const loops = p.loops
-      .map((loop) => clipLoopToRect(loop, s.x0, s.y0, s.x1, s.y1))
-      .filter((loop) => loop.length >= 3 && Math.abs(polyArea(loop)) > 0.05);
+    const loops: Loop[] = [];
+    const leadIns: number[] = [];
+    p.loops.forEach((loop, i) => {
+      const cut = clipLoopToRect(loop, s.x0, s.y0, s.x1, s.y1);
+      if (cut.length < 3 || Math.abs(polyArea(cut)) <= 0.05) return;
+      loops.push(cut);
+      leadIns.push(p.leadIns?.[i] ?? p.leadIn ?? 0);
+    });
     if (!loops.length) continue;
     const holes = (p.holes || [])
       .map((loop) => clipLoopToRect(loop, s.x0, s.y0, s.x1, s.y1))
       .filter((loop) => loop.length >= 3);
     let pick = p.pick || null;
     if (pick && (pick.cx < s.x0 || pick.cx > s.x1 || pick.cy < s.y0 || pick.cy > s.y1)) pick = null;
-    out.push({ loops, holes, pick });
+    out.push({ loops, holes, pick, depth: p.depth, leadIn: leadIns[0] ?? 0, leadIns });
   }
   return out;
 }

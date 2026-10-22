@@ -25,6 +25,8 @@ describe("presets", () => {
     expect(defaults.objects[0].up).toBe("z+");
     expect(defaults.objects[0].clear).toBe(DEFAULTS.clearance);
     expect(defaults.settings.material).toBe("pla");
+    expect(defaults.objects[0].notch).toBe(false);
+    expect(defaults.objects[0].leadIn).toBe(true);
   });
 
   it("saves, lists, renames, and deletes user presets without touching Defaults", () => {
@@ -41,6 +43,12 @@ describe("presets", () => {
     expect(listed[1].name).toBe("Placa 24");
     expect(listed[1].settings.pocketDepth).toBe(24);
     expect(listed[1].objects[0].up).toBe("z-");
+    const notched = capturePreset("Notch", settings, [{ ...obj, notch: true, leadIn: false }]);
+    saveUserPresets(store, [notched]);
+    const round = listPresets(store)[1];
+    expect(round.objects[0].notch).toBe(true);
+    expect(round.objects[0].leadIn).toBe(false);
+    saveUserPresets(store, [saved]);
     expect(store.read(PRESET_KEY)).not.toContain(BUILTIN_DEFAULTS_ID);
 
     const renamed = loadUserPresets(store).map((p) => ({ ...p, name: "Placa profunda" }));
