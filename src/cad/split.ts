@@ -1,5 +1,6 @@
 import earcut from "earcut";
 import {
+  DOWEL_POCKET_WALL,
   SPLIT_DOWEL_DIA,
   SPLIT_HOLE_DIA,
   SPLIT_OVERLAP,
@@ -30,8 +31,10 @@ export interface DowelSite {
   role: "male" | "female";
 }
 
-/** A cut is illegal when this band around it enters a pocket. Keeps the Ø3 pin out of the cavity. */
-const SPLIT_CUT_PAD = SPLIT_OVERLAP;
+/** First cut attempt: keep the 2.5 mm pin shaft out of the pocket, then slide the pin in Y. */
+const SPLIT_CUT_SHAFT = SPLIT_OVERLAP;
+/** Fallback: overlap + 2 mm wall + hole radius, so a pin aligned with the pocket still clears it. */
+const SPLIT_CUT_SAFE = SPLIT_OVERLAP + DOWEL_POCKET_WALL + SPLIT_HOLE_DIA / 2;
 
 function axisHitsInterior(loop: Loop, axis: "x" | "y", at: number): boolean {
   const box = bboxOf([loop]);
@@ -71,7 +74,7 @@ function nearestClearCut(ideal: number, minC: number, maxC: number, blocked: (at
   return null;
 }
 
-function cutsForAxis(length: number, maxBed: number, axis: "x" | "y", obstacles: Loop[]): number[] | null {
+function cutsForAxis(length: number, maxBed: number, axis: "x" | "y", obstacles: Loop[], pad: number): number[] | null {
   if (length <= maxBed + 1e-6) return [0, length];
   const n = Math.max(2, Math.ceil(length / maxBed));
   const cuts = [0];
@@ -79,7 +82,7 @@ function cutsForAxis(length: number, maxBed: number, axis: "x" | "y", obstacles:
     const ideal = (length * i) / n;
     const minC = Math.max(cuts[i - 1] + 1, length - (n - i) * maxBed);
     const maxC = Math.min(length - 1, i * maxBed);
-    const at = nearestClearCut(ideal, minC, maxC, (c) => cutHitsPocket(obstacles, axis, c, SPLIT_CUT_PAD));
+    const at = nearestClearCut(ideal, minC, maxC, (c) => cutHitsPocket(obstacles, axis, c, pad));
     if (at == null) return null;
     cuts.push(at);
   }
@@ -96,19 +99,19 @@ export interface SplitPlan {
   blocked: string | null;
 }
 
-/** Split every axis that exceeds maxPrintBed. Cuts slide to the nearest strip that misses pockets. */
-export function planPlateSplits(jigW: number, jigH: number, maxBed: number, obstacles: Loop[] = []): SplitPlan {
-  const xs = cutsForAxis(jigW, maxBed, "x", obstacles);
-  const ys = cutsForAxis(jigH, maxBed, "y", obstacles);
-  if (!xs || !ys) {
-    return {
-      splits: [],
-      blocked: "Split: el corte atravesaría un pocket y no hay franja libre. No se divide.",
-    };
-  }
+export interface SplitObstacle {
+  label: string;
+  loops: Loop[];
+}
+
+function obstacleLoops(items: SplitObstacle[]): Loop[] {
+  return items.flatMap((item) => item.loops);
+}
+
+function buildSplits(xs: number[], ys: number[]): PlateSplit[] {
   const nx = xs.length - 1;
   const ny = ys.length - 1;
-  if (nx * ny <= 1) return { splits: [], blocked: null };
+  if (nx * ny <= 1) return [];
   const splits: PlateSplit[] = [];
   const n = nx * ny;
   let i = 0;
@@ -128,17 +131,50 @@ export function planPlateSplits(jigW: number, jigH: number, maxBed: number, obst
       });
     }
   }
-  return { splits, blocked: null };
+  return splits;
 }
 
-function distToSeg(p: Pt, a: Pt, b: Pt): number {
-  const dx = b[0] - a[0],
-    dy = b[1] - a[1];
-  const len2 = dx * dx + dy * dy;
-  if (len2 < 1e-12) return Math.hypot(p[0] - a[0], p[1] - a[1]);
-  let t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2;
-  t = Math.max(0, Math.min(1, t));
-  return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+function splitsForPad(jigW: number, jigH: number, maxBed: number, loops: Loop[], pad: number): PlateSplit[] | null {
+  const xs = cutsForAxis(jigW, maxBed, "x", loops, pad);
+  const ys = cutsForAxis(jigH, maxBed, "y", loops, pad);
+  if (!xs || !ys) return null;
+  return buildSplits(xs, ys);
+}
+
+function labelsOnIdealCut(length: number, maxBed: number, axis: "x" | "y", items: SplitObstacle[]): string[] {
+  if (length <= maxBed + 1e-6) return [];
+  const n = Math.max(2, Math.ceil(length / maxBed));
+  const ideals: number[] = [];
+  for (let i = 1; i < n; i++) ideals.push((length * i) / n);
+  const hit = items.filter((item) => ideals.some((at) => item.loops.some((loop) => axisHitsInterior(loop, axis, at))));
+  return hit.map((item) => item.label);
+}
+
+function splitBlockedMessage(labels: string[]): string {
+  const unique = [...new Set(labels)];
+  const shown = unique.slice(0, 6);
+  const hueco =
+    shown.length <= 1
+      ? `el hueco ${shown[0] || "A1"}`
+      : `los huecos ${shown.slice(0, -1).join(", ")} y ${shown[shown.length - 1]}${unique.length > shown.length ? " y otras" : ""}`;
+  return `No se puede dividir: el corte pasaría por ${hueco} y no hay franja libre. Mueve las piezas o desactiva la división.`;
+}
+
+/** Split every axis that exceeds maxPrintBed. Pins slide first; the cut moves only if they cannot. */
+export function planPlateSplits(jigW: number, jigH: number, maxBed: number, obstacles: SplitObstacle[] = []): SplitPlan {
+  const loops = obstacleLoops(obstacles);
+  const needsSplit = jigW > maxBed + 1e-6 || jigH > maxBed + 1e-6;
+  const usable = (splits: PlateSplit[] | null) =>
+    !!splits && (!needsSplit || splits.length >= 2) && dowelsClearSeams(splits, loops, jigW, jigH);
+  const loose = splitsForPad(jigW, jigH, maxBed, loops, SPLIT_CUT_SHAFT);
+  if (usable(loose)) return { splits: loose as PlateSplit[], blocked: null };
+  const safe = splitsForPad(jigW, jigH, maxBed, loops, SPLIT_CUT_SAFE);
+  if (usable(safe)) return { splits: safe as PlateSplit[], blocked: null };
+  const labels = [
+    ...labelsOnIdealCut(jigW, maxBed, "x", obstacles),
+    ...labelsOnIdealCut(jigH, maxBed, "y", obstacles),
+  ];
+  return { splits: [], blocked: splitBlockedMessage(labels.length ? labels : obstacles.map((item) => item.label)) };
 }
 
 function spanWindow(span0: number, span1: number): { a: number; b: number; inset: number; lo: number; hi: number; len: number } {
@@ -165,24 +201,6 @@ export function dowelCenters(span0: number, span1: number): number[] {
   const centers: number[] = [];
   for (let i = 0; i < n; i++) centers.push(a + inset + (usable * (i + 0.5)) / n);
   return centers;
-}
-
-function pocketContains(pockets: MeshPocket[], x: number, y: number, pad: number): boolean {
-  const pt: Pt = [x, y];
-  for (const p of pockets) {
-    for (const loop of p.loops) {
-      if (loop.length < 3) continue;
-      if (pointInPoly(pt, loop)) return true;
-      if (pad > 0) {
-        const b = bboxOf([loop]);
-        if (x < b.minX - pad || x > b.maxX + pad || y < b.minY - pad || y > b.maxY + pad) continue;
-        for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {
-          if (distToSeg(pt, loop[j], loop[i]) <= pad) return true;
-        }
-      }
-    }
-  }
-  return false;
 }
 
 function clipPockets(pockets: MeshPocket[], s: PlateSplit): MeshPocket[] {
@@ -331,12 +349,109 @@ function jointsOf(s: PlateSplit, jigW: number, jigH: number): Joint[] {
   return j;
 }
 
-const DOWEL_CLEAR = SPLIT_HOLE_DIA / 2 + 0.6;
 const DOWEL_MIN_SEP = SPLIT_HOLE_DIA + 8;
 
+function segDist(a: Pt, b: Pt, c: Pt, d: Pt): number {
+  const ux = b[0] - a[0],
+    uy = b[1] - a[1];
+  const vx = d[0] - c[0],
+    vy = d[1] - c[1];
+  const wx = a[0] - c[0],
+    wy = a[1] - c[1];
+  const aa = ux * ux + uy * uy;
+  const bb = ux * vx + uy * vy;
+  const cc = vx * vx + vy * vy;
+  const dd = ux * wx + uy * wy;
+  const ee = vx * wx + vy * wy;
+  const disc = aa * cc - bb * bb;
+  let sN: number;
+  let sD = disc;
+  let tN: number;
+  let tD = disc;
+  if (disc < 1e-8) {
+    sN = 0;
+    sD = 1;
+    tN = ee;
+    tD = cc;
+  } else {
+    sN = bb * ee - cc * dd;
+    tN = aa * ee - bb * dd;
+    if (sN < 0) {
+      sN = 0;
+      tN = ee;
+      tD = cc;
+    } else if (sN > sD) {
+      sN = sD;
+      tN = ee + bb;
+      tD = cc;
+    }
+  }
+  if (tN < 0) {
+    tN = 0;
+    if (-dd < 0) sN = 0;
+    else if (-dd > aa) sN = sD;
+    else {
+      sN = -dd;
+      sD = aa;
+    }
+  } else if (tN > tD) {
+    tN = tD;
+    if (-dd + bb < 0) sN = 0;
+    else if (-dd + bb > aa) sN = sD;
+    else {
+      sN = -dd + bb;
+      sD = aa;
+    }
+  }
+  const sc = Math.abs(sN) < 1e-8 ? 0 : sN / sD;
+  const tc = Math.abs(tN) < 1e-8 ? 0 : tN / tD;
+  return Math.hypot(wx + sc * ux - tc * vx, wy + sc * uy - tc * vy);
+}
+
+function holeEnds(axis: "x" | "y", at: number, span: number): [Pt, Pt] {
+  if (axis === "x") return [
+    [at - SPLIT_OVERLAP, span],
+    [at + SPLIT_OVERLAP, span],
+  ];
+  return [
+    [span, at - SPLIT_OVERLAP],
+    [span, at + SPLIT_OVERLAP],
+  ];
+}
+
+function segmentToLoop(a: Pt, b: Pt, loop: Loop): number {
+  const mid: Pt = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  if (pointInPoly(a, loop) || pointInPoly(b, loop) || pointInPoly(mid, loop)) return 0;
+  let best = Infinity;
+  for (let i = 0; i < loop.length; i++) best = Math.min(best, segDist(a, b, loop[i], loop[(i + 1) % loop.length]));
+  return best;
+}
+
+/** Wall from the Ø3.25 hole (2.5 mm into both halves) to the nearest pocket seat. */
+export function dowelPocketClearance(axis: "x" | "y", at: number, span: number, loops: Loop[]): number {
+  const [a, b] = holeEnds(axis, at, span);
+  let best = Infinity;
+  for (const loop of loops) {
+    if (loop.length < 3) continue;
+    best = Math.min(best, segmentToLoop(a, b, loop) - SPLIT_HOLE_DIA / 2);
+  }
+  return best;
+}
+
 function jointBlocked(j: Joint, span: number, pockets: MeshPocket[]): boolean {
-  const xy: Pt = j.axis === "x" ? [j.at, span] : [span, j.at];
-  return pocketContains(pockets, xy[0], xy[1], DOWEL_CLEAR);
+  return dowelPocketClearance(j.axis, j.at, span, pockets.flatMap((p) => p.loops)) < DOWEL_POCKET_WALL - 1e-3;
+}
+
+function dowelsClearSeams(splits: PlateSplit[], loops: Loop[], jigW: number, jigH: number): boolean {
+  const pockets: MeshPocket[] = loops.map((loop) => ({ loops: [loop] }));
+  for (const split of splits) {
+    for (const joint of jointsOf(split, jigW, jigH)) {
+      const want = dowelCenters(joint.span0, joint.span1).length;
+      const got = placeSpansForJoint(joint.span0, joint.span1, (span) => jointBlocked(joint, span, pockets)).length;
+      if (got < want) return false;
+    }
+  }
+  return true;
 }
 
 /**

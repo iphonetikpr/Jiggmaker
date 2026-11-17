@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import { PICK_OUT_SIDE_MM, SPLIT_DOWEL_DIA, SPLIT_HOLE_DIA, SPLIT_OVERLAP } from "../constants";
 import { toDXF } from "./dxf";
 import { generateJig } from "./generate";
-import { bboxOf, pointInPoly } from "./geom";
+import { bboxOf, pointInPoly, rectLoop } from "./geom";
 import { defaultSettings, newObject } from "./history";
 import { meshSingleIncidenceEdges } from "./mesh";
-import { buildSplitMeshes } from "./split";
-import { makeRingStl } from "./stl";
+import { buildSplitMeshes, dowelPocketClearance, dowelSitesFor } from "./split";
+import { makeLStl, makeRingStl } from "./stl";
+import { wallBlockers } from "./walls";
 import { toSVG } from "./svg";
 import type { HolesMode, JobObject, JobSettings, Tri } from "../types";
 
@@ -60,7 +61,7 @@ describe("geometry audit", () => {
     expect(meshSingleIncidenceEdges(basic.mesh)).toBe(0);
 
     const flush = generateJig([rect()], {}, settings({ marginX: 0, marginY: 0 }), {});
-    expect(flush.blockers.some((line) => line.startsWith("Pared insuficiente"))).toBe(true);
+    expect(flush.blockers.some((line) => line.includes("mínimo 2.75 mm") && line.includes("Sube el margen a 3 mm"))).toBe(true);
     expect(meshSingleIncidenceEdges(flush.mesh)).toBeGreaterThan(0);
     expect(flush.blockers.some((line) => /aristas abiertas/.test(line))).toBe(true);
   });
@@ -88,7 +89,9 @@ describe("geometry audit", () => {
     const tiny = generateJig([rect(10, 10)], {}, settings({ pickOut: true, pickDia: 8 }), {});
     expect(toSVG(tiny.jig.w, tiny.jig.h, tiny.laser.baseEntities)).not.toContain("<circle");
     expect(toDXF(tiny.laser.baseEntities)).not.toContain("CIRCLE");
-    expect(tiny.warn).toContain(`hacen falta ${PICK_OUT_SIDE_MM} mm por lado`);
+    expect(tiny.notices).toContain(
+      `El agujero de extracción Ø8 mm no cabe en A1 (hacen falta ${PICK_OUT_SIDE_MM} mm por lado). Se omite.`,
+    );
     expect(tiny.blockers).toEqual([]);
   });
 
@@ -108,6 +111,14 @@ describe("geometry audit", () => {
       expect(meshSingleIncidenceEdges(piece.mesh)).toBe(0);
       expect(piece.split.x1 - piece.split.x0).toBeLessThanOrEqual(250 + 1e-6);
     }
+    const loops = r.meshPockets.flatMap((p) => p.loops);
+    let minWall = Infinity;
+    for (const split of r.splits) {
+      for (const site of dowelSitesFor(split, r)) {
+        minWall = Math.min(minWall, dowelPocketClearance(site.axis, site.at, site.span, loops));
+      }
+    }
+    expect(minWall).toBeGreaterThanOrEqual(2);
     expect(SPLIT_DOWEL_DIA).toBe(3);
     expect(SPLIT_HOLE_DIA).toBe(3.25);
     expect(SPLIT_OVERLAP).toBe(2.5);
@@ -179,4 +190,85 @@ describe("geometry audit", () => {
     expect(pointInPoly([none.placed[0].cx, none.placed[0].cy], hole)).toBe(true);
     expect(cuts(svg(template))).toBeGreaterThan(cuts(svg(none)));
   });
+
+  it("states the 2.75 mm wall minimum without rounding it up", () => {
+    const lines = wallBlockers(
+      [{ label: "A1", clearance: 0.15, leadIn: true, loops: [rectLoop(10, 10, 0, 0)] }],
+      10,
+      10,
+    );
+    expect(lines).toEqual([
+      "Pared insuficiente: A1 (margen 0 mm, mínimo 2.75 mm). Sube el margen a 3 mm.",
+    ]);
+  });
+
+  it("keeps silhouette clearance on a ring and on an L", () => {
+    const ring = clearanceOf("ring", 0.15);
+    const ell = clearanceOf("ell", 0.15);
+    expect(ring.outer).toBeGreaterThanOrEqual(0.95 * 0.15);
+    expect(ring.inner).toBeGreaterThanOrEqual(0.95 * 0.15);
+    expect(ell.outer).toBeGreaterThanOrEqual(0.95 * 0.15);
+    expect(meshSingleIncidenceEdges(ring.mesh)).toBe(0);
+    expect(meshSingleIncidenceEdges(ell.mesh)).toBe(0);
+  });
 });
+
+function minEdgeDistance(loop: [number, number][], target: [number, number][]): number {
+  let best = Infinity;
+  for (const p of loop) {
+    for (let i = 0; i < target.length; i++) {
+      const a = target[i];
+      const b = target[(i + 1) % target.length];
+      const dx = b[0] - a[0];
+      const dy = b[1] - a[1];
+      const len2 = dx * dx + dy * dy;
+      let t = len2 < 1e-12 ? 0 : ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2;
+      t = Math.max(0, Math.min(1, t));
+      best = Math.min(best, Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy)));
+    }
+  }
+  return best;
+}
+
+/** Pocket contour versus the true part outline, in the pocket's own frame. */
+function clearanceOf(kind: "ring" | "ell", clearance: number) {
+  const buf = kind === "ring" ? makeRingStl() : makeLStl();
+  const obj = newObject(0);
+  obj.stlName = "part";
+  obj.mode = "silhouette";
+  obj.clear = clearance;
+  obj.holes = "none";
+  const result = generateJig([obj], { [obj.id]: buf }, settings({ marginX: 4, marginY: 4 }), {});
+  const piece = result.placed[0];
+  const outer = piece.loops[0];
+  const box = bboxOf([outer]);
+  const cx = (box.minX + box.maxX) / 2;
+  const cy = (box.minY + box.maxY) / 2;
+  const idealOuter: [number, number][] =
+    kind === "ring"
+      ? [
+          [cx - 15, cy - 15],
+          [cx + 15, cy - 15],
+          [cx + 15, cy + 15],
+          [cx - 15, cy + 15],
+        ]
+      : [
+          [cx - 20, cy - 15],
+          [cx + 20, cy - 15],
+          [cx + 20, cy - 15 + 15],
+          [cx - 20 + 15, cy - 15 + 15],
+          [cx - 20 + 15, cy + 15],
+          [cx - 20, cy + 15],
+        ];
+  const idealHole: [number, number][] = [
+    [cx - 5, cy - 5],
+    [cx + 5, cy - 5],
+    [cx + 5, cy + 5],
+    [cx - 5, cy + 5],
+  ];
+  return {
+    outer: minEdgeDistance(outer, idealOuter),
+    inner: kind === "ring" ? minEdgeDistance(piece.holes[0], idealHole) : Infinity,
+    mesh: result.mesh,
+  };
+}

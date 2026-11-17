@@ -15,7 +15,9 @@ export function SummaryCard({ result }: { result: JigResult }) {
           <div className="sum-bed">STL {summaryStlSize(result)}</div>
         </div>
         <div className="sum-pills">
-          <span className={result.fits ? "pill ok-pill" : "pill warn-pill"}>{result.fits ? "fits" : "no cabe"}</span>
+          <span className={result.blockers.length ? "pill warn-pill" : "pill ok-pill"}>
+            {result.blockers.length ? "No se puede exportar" : result.fits ? "fits" : "no cabe"}
+          </span>
         </div>
       </div>
       <div className="sum-objs">
@@ -52,7 +54,7 @@ export function SummaryCard({ result }: { result: JigResult }) {
           <b>{result.mesh.length} triangles</b>
         </div>
       </div>
-      {baseWarn ? <p className="warnbar thin-base-warn">{baseWarn}</p> : null}
+      {baseWarn ? <p className="notice-msg thin-base-warn">{baseWarn}</p> : null}
     </section>
   );
 }

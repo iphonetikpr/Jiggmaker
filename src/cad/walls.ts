@@ -1,5 +1,6 @@
 import { MIN_WALL_EXTRA_MM } from "../constants";
 import type { Loop } from "../types";
+import { formatMm } from "./format";
 import { bboxOf } from "./geom";
 import { leadInDepth } from "./leadIn";
 
@@ -40,6 +41,12 @@ export interface WallPiece {
   loops: Loop[];
 }
 
+/** Next margin the number field can show: round the threshold up to a 0.5 mm step. */
+export function suggestedMarginMm(required: number): number {
+  const step = 0.5;
+  return Math.ceil((required - 1e-9) / step) * step;
+}
+
 export function wallBlockers(pieces: WallPiece[], plateW: number, plateH: number): string[] {
   const problems: string[] = [];
   const reqs = pieces.map((piece) => {
@@ -50,7 +57,9 @@ export function wallBlockers(pieces: WallPiece[], plateW: number, plateH: number
     if (!piece.loops.length) return;
     const gap = Math.min(...piece.loops.map((loop) => edgeGapMm(loop, plateW, plateH)));
     if (gap < reqs[i] - 1e-3) {
-      problems.push(`${piece.label} (margen ${gap.toFixed(1)} mm, mínimo ${reqs[i].toFixed(1)} mm)`);
+      problems.push(
+        `Pared insuficiente: ${piece.label} (margen ${formatMm(Math.max(0, gap), 2)} mm, mínimo ${formatMm(reqs[i], 2)} mm). Sube el margen a ${formatMm(suggestedMarginMm(reqs[i]), 2)} mm.`,
+      );
     }
   });
   for (let i = 0; i < pieces.length; i++) {
@@ -59,10 +68,11 @@ export function wallBlockers(pieces: WallPiece[], plateW: number, plateH: number
       if (gap < -0.05) continue;
       const req = Math.max(reqs[i], reqs[j]);
       if (gap < req - 1e-3) {
-        problems.push(`${pieces[i].label}–${pieces[j].label} (pared ${gap.toFixed(1)} mm, mínimo ${req.toFixed(1)} mm)`);
+        problems.push(
+          `Pared insuficiente: ${pieces[i].label}–${pieces[j].label} (pared ${formatMm(Math.max(0, gap), 2)} mm, mínimo ${formatMm(req, 2)} mm). Sepáralas o reduce el chaflán.`,
+        );
       }
     }
   }
-  if (!problems.length) return [];
-  return [`Pared insuficiente: ${problems.join("; ")}`];
+  return problems;
 }

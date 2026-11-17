@@ -34,7 +34,7 @@ describe("layout integrity", () => {
     expect(r.blockers).toContain(
       "Falta B ×1 (400×30 mm) en la cama Mini (333×88 mm). Usa la cama Large o reduce el ancho de B.",
     );
-    expect(r.warn).toContain("Falta B ×1 (400×30 mm)");
+    expect(r.blockers.join("\n")).toContain("Falta B ×1 (400×30 mm)");
     expect(r.placed.map((p) => p.label)).toEqual(["A1"]);
   });
 
@@ -62,7 +62,7 @@ describe("layout integrity", () => {
     expect(r.objects[0].placed).toBe(2);
     expect(r.fits).toBe(false);
     expect(r.blockers).toContain("Solape: A1 y A2 (21.3 mm). Sepáralas.");
-    expect(r.warn).toContain("Solape: A1 y A2 (21.3 mm). Sepáralas.");
+    expect(r.blockers.join("\n")).toContain("Solape: A1 y A2 (21.3 mm). Sepáralas.");
 
     const art = r.placed.map((p) => bboxOf(p.art));
     const overlap = Math.min(art[0].maxX, art[1].maxX) - Math.max(art[0].minX, art[1].minX);
@@ -90,7 +90,7 @@ describe("layout integrity", () => {
     expect(base.fits).toBe(true);
     const shoved = generateJig([a], {}, mini(), { A1: [400, 0] });
     expect(shoved.fits).toBe(false);
-    expect(shoved.blockers.some((line) => /^A1 queda fuera del margen \(0 mm al borde, mínimo 2 mm\)/.test(line))).toBe(true);
+    expect(shoved.blockers.some((line) => /A1 queda fuera del margen \([0-9.]+ mm al borde, mínimo 3 mm\)/.test(line))).toBe(true);
   });
 
   it("states the measured edge gap and the margin minimum", () => {

@@ -24,7 +24,11 @@ function frameOf(loops: Loop[], ox: number, oy: number): Loop[] {
 }
 
 function seatLoops(proj: Projected, mode: JobObject["mode"], clearance: number, pocketDepth: number) {
-  const fullClear = mode === "rectangle" ? inflatedRect(proj.bbox, clearance) : silhouetteLoops(proj, clearance);
+  // Marching squares sits about half a pixel inside the dilated mask, so grow by that
+  // amount. maxPixel = clearance/3 keeps the leftover error under 5% of the clearance.
+  const pocketPixel = clearance > 0 ? clearance / 3 : undefined;
+  const pocketClear = clearance > 0 && pocketPixel ? clearance + pocketPixel / 2 : clearance;
+  const fullClear = mode === "rectangle" ? inflatedRect(proj.bbox, clearance) : silhouetteLoops(proj, pocketClear, pocketPixel);
   const fullArt = mode === "rectangle" ? inflatedRect(proj.bbox, 0) : silhouetteLoops(proj, 0);
   const clearClass = classifyContours(fullClear);
   const artClass = classifyContours(fullArt);

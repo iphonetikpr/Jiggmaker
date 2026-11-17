@@ -1,5 +1,6 @@
 import { FRAME_PLATE, PICK_OUT_SIDE_MM } from "../constants";
 import type { BedSize, Entity, JobObject, JobSettings, JigResult, Loop, PlacedPiece } from "../types";
+import { formatMm } from "./format";
 import { bboxOf, pointInPoly, pointSegDistance, rectLoop, roundedRectLoop, translateLoop } from "./geom";
 import { applyMoves, assessPlacement, footprintOf, packObjects } from "./layout";
 import { extrudePlate, meshSingleIncidenceEdges, plateMeshXform, solidHeight } from "./mesh";
@@ -258,7 +259,14 @@ export function generateJig(
   const maxBed = settings.maxPrintBed || 250;
   const oversized = jigW > maxBed + 1e-6 || jigH > maxBed + 1e-6;
   const splitPlan =
-    settings.splitPlate && oversized ? planPlateSplits(jigW, jigH, maxBed, meshPockets.flatMap((p) => p.loops)) : null;
+    settings.splitPlate && oversized
+      ? planPlateSplits(
+          jigW,
+          jigH,
+          maxBed,
+          placed.map((p) => ({ label: p.label, loops: plateLoops(p) })),
+        )
+      : null;
   const splits = splitPlan?.splits ?? [];
 
   const blockers = [
@@ -276,20 +284,20 @@ export function generateJig(
   ];
   if (splitPlan?.blocked) blockers.push(splitPlan.blocked);
 
-  const notes: string[] = [...blockers];
+  const notices: string[] = [];
   if (layout.fits && oversized && !splitPlan?.blocked) {
-    notes.push(
+    notices.push(
       settings.splitPlate
         ? `Placa ${jigW.toFixed(0)}×${jigH.toFixed(0)} mm > ${maxBed} mm: split en ${splits.length || 2} piezas (o imprime en H2).`
         : `Placa ${jigW.toFixed(0)}×${jigH.toFixed(0)} mm > cama FDM ${maxBed} mm. Por defecto se asume H2 (250×250×250+). Activa split para dividir, o imprime en una H2.`,
     );
   }
-  if (pickNotes.length) {
-    notes.push(
-      `Pick-out Ø${settings.pickDia} no cabe en ${pickNotes.join(", ")} (hacen falta ${PICK_OUT_SIDE_MM} mm por lado). Se omite.`,
+  for (const label of pickNotes) {
+    notices.push(
+      `El agujero de extracción Ø${formatMm(settings.pickDia, 1)} mm no cabe en ${label} (hacen falta ${PICK_OUT_SIDE_MM} mm por lado). Se omite.`,
     );
   }
-  const warn = notes.length ? notes.join("\n") : null;
+  const warn = notices.length ? notices.join("\n") : null;
 
   const result: JigResult = {
     placed,
@@ -310,6 +318,7 @@ export function generateJig(
     totalUnits: placed.length,
     fits: layout.fits,
     blockers,
+    notices,
     partHeight: prepped.length ? Math.max(...prepped.map((o) => o.partHeight)) : 0,
     bed,
     plateName: plateLabel(settings),
@@ -333,11 +342,11 @@ export function generateJig(
     ? buildSplitMeshes(result).reduce((sum, piece) => sum + meshSingleIncidenceEdges(piece.mesh), 0)
     : meshSingleIncidenceEdges(mesh);
   if (openEdges > 0) {
-    const msg = splits.length
-      ? `STL dividido con ${openEdges} aristas abiertas. No se exporta.`
-      : `STL con ${openEdges} aristas abiertas. No se exporta.`;
-    result.blockers.push(msg);
-    result.warn = result.warn ? `${result.warn} ${msg}` : msg;
+    result.blockers.push(
+      splits.length
+        ? `La malla dividida tiene ${openEdges} aristas abiertas. No se exporta. Mueve las piezas o desactiva la división.`
+        : `La malla tiene ${openEdges} aristas abiertas. No se exporta. Sube el margen o revisa el chaflán.`,
+    );
   }
   return result;
 }

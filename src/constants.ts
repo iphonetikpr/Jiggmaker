@@ -123,6 +123,8 @@ export const SPLIT_HOLE_DIA_MIN = 3.2;
 export const SPLIT_HOLE_DIA_MAX = 3.3;
 /** 0.25 mm clearance on the Ø3.0 pin — inside the 3.2–3.3 window. */
 export const SPLIT_HOLE_DIA = 3.25;
+/** Solid wall required between a dowel hole (Ø and 2.5 mm depth) and a pocket seat. */
+export const DOWEL_POCKET_WALL = 2;
 
 /**
  * Fit-test strip: three per-side silhouette offsets, one material table.
