@@ -1,4 +1,5 @@
 import type { JobSettings, PlacedPiece, PreparedObject } from "../types";
+import { formatMm } from "./format";
 import { bboxOf, loopsOverlap, loopsOverlapDepth, translateLoop } from "./geom";
 
 /** Layout cell of a placed part (full footprint), not the pocket-loop bbox. */
@@ -120,11 +121,8 @@ export function packObjects(
   const b = placed.length ? footprintOf(placed) : { w: 0, h: 0, minX: 0, minY: 0, maxX: 0, maxY: 0 };
   const layout = assessPlacement(
     placed,
-    objects.map((o, index) => ({ index, letter: o.letter, count: o.count })),
-    bedW,
-    bedH,
-    mx,
-    my,
+    objects.map((o, index) => ({ index, letter: o.letter, count: o.count, w: o.w, h: o.h })),
+    { bedW, bedH, marginX: mx, marginY: my, bedName: "cama" },
   );
 
   return { placed, usedW: b.w, usedH: b.h, fits: layout.fits };
@@ -134,6 +132,17 @@ export interface PlacementRequest {
   index: number;
   letter: string;
   count: number;
+  /** Nominal size shown in the missing-piece message. */
+  w: number;
+  h: number;
+}
+
+export interface PlacementBed {
+  bedW: number;
+  bedH: number;
+  marginX: number;
+  marginY: number;
+  bedName: string;
 }
 
 export interface PlacementAssessment {
@@ -147,57 +156,59 @@ export interface PlacementAssessment {
  * bed margins, and pockets do not overlap. Call this after moves: packing alone
  * does not see imported or dragged positions.
  */
+function bedFix(bedName: string, letter: string): string {
+  if (bedName === "Mini") return `Usa la cama Large o reduce el ancho de ${letter}.`;
+  return `Reduce el ancho de ${letter}.`;
+}
+
 export function assessPlacement(
   placed: PlacedPiece[],
   requested: PlacementRequest[],
-  bedW: number,
-  bedH: number,
-  marginX: number,
-  marginY: number,
+  bed: PlacementBed,
 ): PlacementAssessment {
+  const { bedW, bedH, marginX, marginY, bedName } = bed;
   const blockers: string[] = [];
-  const missing: string[] = [];
   for (const req of requested) {
     const got = placed.filter((p) => p.obj === req.index).length;
     const miss = req.count - got;
-    if (miss > 0) missing.push(`${req.letter} ×${miss}`);
+    if (miss <= 0) continue;
+    blockers.push(
+      `Falta ${req.letter} ×${miss} (${formatMm(req.w, 1)}×${formatMm(req.h, 1)} mm) en la cama ${bedName} (${formatMm(bedW, 1)}×${formatMm(bedH, 1)} mm). ${bedFix(bedName, req.letter)}`,
+    );
   }
-  if (missing.length) blockers.push(`Faltan: ${missing.join(", ")}`);
 
-  const outside: string[] = [];
   for (const p of placed) {
     const box = p.loops.length ? bboxOf(p.loops) : { minX: p.x, minY: p.y, maxX: p.x + p.w, maxY: p.y + p.h, w: p.w, h: p.h };
-    if (
-      box.minX < marginX - 1e-3 ||
-      box.minY < marginY - 1e-3 ||
-      box.maxX > bedW - marginX + 1e-3 ||
-      box.maxY > bedH - marginY + 1e-3
-    ) {
-      outside.push(p.label);
+    const sides = [
+      { gap: box.minX, min: marginX },
+      { gap: bedW - box.maxX, min: marginX },
+      { gap: box.minY, min: marginY },
+      { gap: bedH - box.maxY, min: marginY },
+    ];
+    const worst = sides.reduce((a, b) => (a.gap < b.gap ? a : b));
+    if (worst.gap < worst.min - 1e-3) {
+      blockers.push(
+        `${p.label} queda fuera del margen (${formatMm(Math.max(0, worst.gap), 1)} mm al borde, mínimo ${formatMm(worst.min, 1)} mm). Apártala del borde o sube el margen.`,
+      );
     }
   }
-  if (outside.length) blockers.push(`Fuera de margen: ${outside.join(", ")}`);
 
-  const overlaps: string[] = [];
   for (let i = 0; i < placed.length; i++) {
     for (let j = i + 1; j < placed.length; j++) {
       const a = placed[i];
       const b = placed[j];
       let depth = 0;
-      const loopsA = a.loops.length ? a.loops : [];
-      const loopsB = b.loops.length ? b.loops : [];
-      for (const la of loopsA) {
-        for (const lb of loopsB) {
+      for (const la of a.loops) {
+        for (const lb of b.loops) {
           if (!loopsOverlap(la, lb)) continue;
           depth = Math.max(depth, loopsOverlapDepth(la, lb));
         }
       }
       if (depth > 0.05) {
-        overlaps.push(`${a.label} y ${b.label} (${Math.round(depth)} mm)`);
+        blockers.push(`Solape: ${a.label} y ${b.label} (${formatMm(depth, 1)} mm). Sepáralas.`);
       }
     }
   }
-  if (overlaps.length) blockers.push(`Solape: ${overlaps.join(", ")}`);
 
   return { fits: blockers.length === 0, blockers };
 }

@@ -57,11 +57,14 @@ export function generateJig(
   // Moves (imported or dragged) land after packing. Re-check quantities, margins, and overlap.
   const layout = assessPlacement(
     pack.placed,
-    prepped.map((o, index) => ({ index, letter: o.letter, count: o.count })),
-    bed.w,
-    bed.h,
-    settings.marginX,
-    settings.marginY,
+    prepped.map((o, index) => ({
+      index,
+      letter: o.letter,
+      count: o.count,
+      w: objects[index]?.stlName ? o.w : objects[index].rectW,
+      h: objects[index]?.stlName ? o.h : objects[index].rectH,
+    })),
+    { bedW: bed.w, bedH: bed.h, marginX: settings.marginX, marginY: settings.marginY, bedName: bed.name },
   );
 
   let jigW = bed.w;
@@ -234,16 +237,14 @@ export function generateJig(
   const splits = settings.splitPlate && oversized ? planPlateSplits(jigW, jigH, maxBed) : [];
 
   const notes: string[] = [...layout.blockers];
-  if (!layout.fits) {
-    notes.push("No cabe todo en la cama. Baja qty, spacing o márgenes, o separa las piezas.");
-  } else if (oversized) {
+  if (layout.fits && oversized) {
     notes.push(
       settings.splitPlate
         ? `Placa ${jigW.toFixed(0)}×${jigH.toFixed(0)} mm > ${maxBed} mm: split en ${splits.length || 2} piezas (o imprime en H2).`
         : `Placa ${jigW.toFixed(0)}×${jigH.toFixed(0)} mm > cama FDM ${maxBed} mm. Por defecto se asume H2 (250×250×250+). Activa split para dividir, o imprime en una H2.`,
     );
   }
-  const warn = notes.length ? notes.join(" ") : null;
+  const warn = notes.length ? notes.join("\n") : null;
 
   return {
     placed,

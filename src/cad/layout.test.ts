@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { generateJig } from "./generate";
-import { bboxOf } from "./geom";
+import { bboxOf, rectLoop } from "./geom";
 import { defaultSettings, newObject } from "./history";
-import type { JobObject, JobSettings } from "../types";
+import { assessPlacement } from "./layout";
+import type { JobObject, JobSettings, PlacedPiece } from "../types";
 
 function rect(w: number, h: number, patch: Partial<JobObject> = {}): JobObject {
   const obj = newObject(0);
@@ -30,8 +31,10 @@ describe("layout integrity", () => {
     expect(r.objects[1].requested).toBe(1);
     expect(r.objects[1].placed).toBe(0);
     expect(r.totalUnits).toBe(1);
-    expect(r.warn).toContain("Faltan: B ×1");
-    expect(r.blockers.some((line) => line.includes("Faltan: B ×1"))).toBe(true);
+    expect(r.blockers).toContain(
+      "Falta B ×1 (400×30 mm) en la cama Mini (333×88 mm). Usa la cama Large o reduce el ancho de B.",
+    );
+    expect(r.warn).toContain("Falta B ×1 (400×30 mm)");
     expect(r.placed.map((p) => p.label)).toEqual(["A1"]);
   });
 
@@ -40,13 +43,15 @@ describe("layout integrity", () => {
     const withMargin = generateJig([huge], {}, mini(), {});
     expect(withMargin.fits).toBe(false);
     expect(withMargin.totalUnits).toBe(0);
-    expect(withMargin.warn).toContain("Faltan: A ×1");
+    expect(withMargin.blockers[0]).toBe(
+      "Falta A ×1 (400×30 mm) en la cama Mini (333×88 mm). Usa la cama Large o reduce el ancho de A.",
+    );
     expect(withMargin.blockers.length).toBeGreaterThan(0);
 
     const flush = generateJig([huge], {}, mini({ marginX: 0, marginY: 0 }), {});
     expect(flush.fits).toBe(false);
     expect(flush.placed).toHaveLength(0);
-    expect(flush.warn).toContain("Faltan: A ×1");
+    expect(flush.blockers[0]).toMatch(/^Falta A ×1 \(400×30 mm\)/);
     expect(flush.blockers.length).toBeGreaterThan(0);
   });
 
@@ -56,8 +61,8 @@ describe("layout integrity", () => {
     expect(r.placed).toHaveLength(2);
     expect(r.objects[0].placed).toBe(2);
     expect(r.fits).toBe(false);
-    expect(r.warn).toMatch(/Solape: A1 y A2 \(21 mm\)/);
-    expect(r.blockers.some((line) => /Solape: A1 y A2/.test(line))).toBe(true);
+    expect(r.blockers).toContain("Solape: A1 y A2 (21.3 mm). Sepáralas.");
+    expect(r.warn).toContain("Solape: A1 y A2 (21.3 mm). Sepáralas.");
 
     const art = r.placed.map((p) => bboxOf(p.art));
     const overlap = Math.min(art[0].maxX, art[1].maxX) - Math.max(art[0].minX, art[1].minX);
@@ -85,7 +90,39 @@ describe("layout integrity", () => {
     expect(base.fits).toBe(true);
     const shoved = generateJig([a], {}, mini(), { A1: [400, 0] });
     expect(shoved.fits).toBe(false);
-    expect(shoved.warn).toMatch(/Fuera de margen: A1/);
-    expect(shoved.blockers.length).toBeGreaterThan(0);
+    expect(shoved.blockers.some((line) => /^A1 queda fuera del margen \(0 mm al borde, mínimo 2 mm\)/.test(line))).toBe(true);
+  });
+
+  it("states the measured edge gap and the margin minimum", () => {
+    const loop = rectLoop(20, 20, 0.4, 10);
+    const placed: PlacedPiece[] = [
+      {
+        obj: 0,
+        label: "A1",
+        color: "#000",
+        x: 0.4,
+        y: 10,
+        cx: 10.4,
+        cy: 20,
+        w: 20,
+        h: 20,
+        loops: [loop],
+        holes: [],
+        art: [loop],
+        artHoles: [],
+        hmode: "none",
+        paintSafe: [],
+      },
+    ];
+    const layout = assessPlacement(placed, [{ index: 0, letter: "A", count: 1, w: 20, h: 20 }], {
+      bedW: 333,
+      bedH: 88,
+      marginX: 3,
+      marginY: 3,
+      bedName: "Mini",
+    });
+    expect(layout.blockers).toEqual([
+      "A1 queda fuera del margen (0.4 mm al borde, mínimo 3 mm). Apártala del borde o sube el margen.",
+    ]);
   });
 });
