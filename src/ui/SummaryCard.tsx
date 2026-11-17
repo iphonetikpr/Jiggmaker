@@ -1,9 +1,11 @@
 import type { JigResult } from "../types";
-import { summaryBedLine, summaryJigSize, summaryPlateHint, summaryStlSize, thinBaseWarning, truncateName } from "./summary";
+import { formatMm, summaryBedLine, summaryJigSize, summaryPlateHint, summaryStlCompensated, summaryStlNominal, thinBaseWarning, truncateName } from "./summary";
 
 export function SummaryCard({ result }: { result: JigResult }) {
   const hint = summaryPlateHint(result);
   const baseWarn = thinBaseWarning(result.jig.w, result.jig.h, result.baseThk);
+  const compensated = summaryStlCompensated(result);
+  const scaleLabel = formatMm(result.meshXform.s, 3);
   return (
     <section className="card summary-card">
       <h2>Summary</h2>
@@ -12,7 +14,8 @@ export function SummaryCard({ result }: { result: JigResult }) {
           <div className="sum-count">{result.totalUnits}</div>
           <div className="sum-pockets">{result.totalUnits === 1 ? "pocket" : "pockets"}</div>
           <div className="sum-bed">{summaryBedLine(result)}</div>
-          <div className="sum-bed">STL {summaryStlSize(result)}</div>
+          <div className="sum-bed">STL nominal {summaryStlNominal(result)}</div>
+          {compensated ? <div className="sum-bed">STL ×{scaleLabel} {compensated}</div> : null}
         </div>
         <div className="sum-pills">
           <span className={result.blockers.length ? "pill warn-pill" : "pill ok-pill"}>
@@ -28,7 +31,10 @@ export function SummaryCard({ result }: { result: JigResult }) {
               {o.letter} {truncateName(o.name)}
             </span>
             <span className="sum-obj-meta">
-              ×{o.placed} · {o.w.toFixed(0)}×{o.h.toFixed(0)} mm
+              ×{o.placed} · {formatMm(o.nominalW)}×{formatMm(o.nominalH)} mm
+              {Math.abs(o.w - o.nominalW) > 0.049 || Math.abs(o.h - o.nominalH) > 0.049
+                ? ` · pocket ${formatMm(o.w)}×${formatMm(o.h)}`
+                : ""}
             </span>
           </div>
         ))}
@@ -46,9 +52,15 @@ export function SummaryCard({ result }: { result: JigResult }) {
           <b>{result.partHeight.toFixed(1)} mm</b>
         </div>
         <div>
-          <span>STL size</span>
-          <b>{summaryStlSize(result)}</b>
+          <span>STL nominal</span>
+          <b>{summaryStlNominal(result)}</b>
         </div>
+        {compensated ? (
+          <div>
+            <span>STL ×{scaleLabel}</span>
+            <b>{compensated}</b>
+          </div>
+        ) : null}
         <div>
           <span>Jig mesh</span>
           <b>{result.mesh.length} triangles</b>

@@ -1,13 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULTS, FRAME_PLATE, HISTORY_KEY, MINI_BED, POCKET_DEPTH_EXTRA, SCALE_COMP, SPLIT_DOWEL_DIA, SPLIT_HOLE_DIA, SPLIT_HOLE_DIA_MAX, SPLIT_HOLE_DIA_MIN } from "../constants";
 import { toDXF } from "./dxf";
 import { exportBasename } from "./filename";
 import { generateJig } from "./generate";
-import { applyHistorySettings, defaultSettings, loadHistory, mergeImported, newObject, saveHistory, serializeJob } from "./history";
+import { applyHistorySettings, defaultSettings, deleteHistoryJob, HISTORY_SAVE_FAILED, importHistoryJobs, loadHistory, mergeImported, newObject, saveHistory, serializeJob } from "./history";
 import { toAsciiSTL, toBinarySTL } from "./mesh";
 import { toSVG } from "./svg";
 import { makeBoxStl, makeLStl, parseSTL } from "./stl";
 import type { JobSettings } from "../types";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 function rectJob(patch: Partial<JobSettings> = {}) {
   const settings: JobSettings = { ...defaultSettings(), ...patch };
@@ -221,6 +225,35 @@ describe("history", () => {
     expect(restored.maxPrintBed).toBe(250);
     const { added } = mergeImported([], incoming);
     expect(added).toBe(1);
+  });
+
+  it("does not report a saved history when localStorage rejects the write", () => {
+    const job = serializeJob("keep", defaultSettings(), [newObject(0)], {}, {});
+    const stored = JSON.stringify([job]);
+    const setItem = vi.fn(() => {
+      throw new Error("quota");
+    });
+    vi.stubGlobal("localStorage", {
+      getItem: () => stored,
+      setItem,
+      removeItem: () => undefined,
+    });
+    const imported = importHistoryJobs([job], {
+      id: "h-new",
+      name: "incoming",
+      date: "2026-02-01T00:00:00.000Z",
+      settings: { bed: "333x88" },
+      objects: [{ name: "a", count: 1 }],
+    });
+    expect(imported.ok).toBe(false);
+    if (!imported.ok) expect(imported.error).toBe(HISTORY_SAVE_FAILED);
+    expect(setItem).toHaveBeenCalled();
+    expect(loadHistory()[0].id).toBe(job.id);
+
+    const removed = deleteHistoryJob([job], job.id);
+    expect(removed.ok).toBe(false);
+    if (!removed.ok) expect(removed.error).toBe(HISTORY_SAVE_FAILED);
+    expect(JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]")[0].id).toBe(job.id);
   });
 
   it("uses a path-independent localStorage key (NAS and Pages share the same API)", () => {

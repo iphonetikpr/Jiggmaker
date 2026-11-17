@@ -84,7 +84,7 @@ describe("per-object Z down", () => {
     expect(zDown.partHeight).toBeCloseTo(26.5, 1);
     expect(zDown.solidH).toBeCloseTo(24, 5);
     expect(zDown.solidH).toBeLessThan(zDown.partHeight);
-    expect(summaryJigSize(zDown)).toBe("146 × 184 mm");
+    expect(summaryJigSize(zDown)).toBe("145.8 × 183.8 mm");
 
     const plateArea = 139.7 * 177.8;
     for (const loop of zDown.meshPockets[0].loops) {

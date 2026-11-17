@@ -41,14 +41,14 @@ describe("tight jig footprint", () => {
   it("trims the STL to the parts plus the existing margin, not the bed", () => {
     const tight = seatingJob({ footprint: "tight" });
     const full = seatingJob({ footprint: "bed" });
-    expect(summaryJigSize(tight)).toBe("146 × 184 mm");
+    expect(summaryJigSize(tight)).toBe("145.8 × 183.8 mm");
     expect(tight.jig.w).toBeLessThan(160);
     expect(tight.jig.h).toBeLessThan(200);
     expect(tight.jig.w).toBeCloseTo(139.7 + 2 * DEFAULTS.marginX, 0);
     expect(tight.jig.h).toBeCloseTo(177.8 + 2 * DEFAULTS.marginY, 0);
     expect(full.jig.w).toBe(LARGE_BED.w);
     expect(full.jig.h).toBe(LARGE_BED.h);
-    expect(summaryStlSize(tight)).toBe("146 × 184 × 5.0 mm");
+    expect(summaryStlSize(tight)).toBe("145.8 × 183.8 × 5 mm");
     expect(tight.solidH).toBeCloseTo(DEFAULTS.baseThk + DEFAULTS.pocketDepth, 5);
     expect(thinBaseWarning(tight.jig.w, tight.jig.h, tight.baseThk)).toBeNull();
     expect(thinBaseWarning(full.jig.w, full.jig.h, full.baseThk)).toBe(THIN_BASE_WARNING);
@@ -110,7 +110,7 @@ describe("tight jig footprint", () => {
     const deep = seatingJob({ footprint: "tight", baseThk: 3, pocketDepth: 21 });
     expect(deep.solidH).toBeCloseTo(24, 5);
     expect(deep.pocketDepth).toBe(21);
-    expect(summaryStlSize(deep)).toBe("146 × 184 × 24.0 mm");
+    expect(summaryStlSize(deep)).toBe("145.8 × 183.8 × 24 mm");
     expect(deep.meshPockets[0].loops.length).toBe(6);
 
     const through = seatingJob({ footprint: "tight", baseThk: 0, pocketDepth: 4 });

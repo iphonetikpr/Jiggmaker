@@ -14,6 +14,14 @@ export function flipUp(up: UpAxis): UpAxis {
   return FLIP_UP[up];
 }
 
+/** Up to `digits` decimals, without trailing zeros. 1.5 stays 1.5; 30 stays 30. */
+export function formatMm(n: number, digits = 2): string {
+  if (!Number.isFinite(n)) return "0";
+  const factor = 10 ** digits;
+  const rounded = Math.round(n * factor) / factor;
+  return String(rounded);
+}
+
 /** Bed line in the Summary card, e.g. "Mini · 333 × 88 mm". */
 export function summaryBedLine(result: JigResult): string {
   const b = result.bed;
@@ -21,12 +29,24 @@ export function summaryBedLine(result: JigResult): string {
 }
 
 export function summaryJigSize(result: JigResult): string {
-  return `${result.jig.w.toFixed(0)} × ${result.jig.h.toFixed(0)} mm`;
+  return `${formatMm(result.jig.w)} × ${formatMm(result.jig.h)} mm`;
 }
 
-/** Nominal exported plate, before scaleComp. Height is base thickness + pocket depth. */
+/** Plate size before scaleComp. Height is base thickness + pocket depth. */
+export function summaryStlNominal(result: JigResult): string {
+  return `${formatMm(result.jig.w)} × ${formatMm(result.jig.h)} × ${formatMm(result.solidH)} mm`;
+}
+
+/** Same plate after the intentional ×1.003 scale. Null when scaleComp is off. */
+export function summaryStlCompensated(result: JigResult): string | null {
+  const scale = result.meshXform?.s ?? 1;
+  if (Math.abs(scale - 1) < 1e-9) return null;
+  return `${formatMm(result.jig.w * scale, 3)} × ${formatMm(result.jig.h * scale, 3)} × ${formatMm(result.solidH * scale, 3)} mm`;
+}
+
+/** Nominal exported plate, before scaleComp. */
 export function summaryStlSize(result: JigResult): string {
-  return `${result.jig.w.toFixed(0)} × ${result.jig.h.toFixed(0)} × ${result.solidH.toFixed(1)} mm`;
+  return summaryStlNominal(result);
 }
 
 export const THIN_BASE_WARNING =

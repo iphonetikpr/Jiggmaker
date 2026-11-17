@@ -1,6 +1,7 @@
 import { DEFAULTS, OBJECT_COLORS } from "../constants";
-import type { HolesMode, JobObject, Loop, PreparedObject, StlMesh } from "../types";
+import type { HolesMode, JobObject, Loop, PreparedObject, Pt, StlMesh } from "../types";
 import {
+  bboxOf,
   classifyContours,
   cleanLoop,
   ensureCCW,
@@ -11,7 +12,6 @@ import {
   polyArea,
   translateLoop,
 } from "./geom";
-import type { Pt } from "../types";
 import { clipToDepth, loopsArea, projectStl, silhouetteLoops, type Projected } from "./project";
 import { parseSTL } from "./stl";
 
@@ -387,6 +387,8 @@ export function prepareObject(
       holesMode: obj.holes as HolesMode,
       w: centered.w,
       h: centered.h,
+      nominalW: bboxOf(artLoops).w || centered.w,
+      nominalH: bboxOf(artLoops).h || centered.h,
       partHeight: proj.partHeight,
     };
   }
@@ -411,6 +413,8 @@ export function prepareObject(
     holesMode: obj.holes as HolesMode,
     w: centered.w,
     h: centered.h,
+    nominalW: w,
+    nominalH: h,
     partHeight: 8,
   };
 }

@@ -1,6 +1,7 @@
 import { MAX_OBJECTS, PROJECT_SCHEMA, PROJECT_SCHEMA_VERSION } from "../constants";
 import type { HistoryJob, JobObject, JobSettings } from "../types";
 import { applyHistorySettings, b64ToBytes, newObject, serializeJob } from "./history";
+import { normalizeObject } from "./limits";
 import { parseSTL } from "./stl";
 
 export interface ProjectDocument {
@@ -136,7 +137,7 @@ export function materializeProject(project: ProjectDocument): ProjectResult<Mate
     } else {
       o.mode = "rectangle";
     }
-    objects.push(o);
+    objects.push(normalizeObject(o));
   }
   return {
     ok: true,
