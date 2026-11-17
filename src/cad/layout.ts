@@ -1,5 +1,5 @@
 import type { JobSettings, PlacedPiece, PreparedObject } from "../types";
-import { translateLoop } from "./geom";
+import { bboxOf, loopsOverlap, loopsOverlapDepth, translateLoop } from "./geom";
 
 /** Layout cell of a placed part (full footprint), not the pocket-loop bbox. */
 export function footprintOf(placed: PlacedPiece[]): {
@@ -47,6 +47,7 @@ function packBand(
   while (n < count && row < 4000) {
     const dx = settings.nest && row % 2 ? offset : 0;
     const maxCols = settings.nest && row % 2 ? Math.max(1, cols - (offset > 0.01 ? 0 : 0)) : cols;
+    const before = n;
     for (let c = 0; c < maxCols && n < count; c++) {
       const x = dx + c * pitchX;
       if (x + prep.w > availW + 1e-6) break;
@@ -54,6 +55,8 @@ function packBand(
       pts.push({ x, y, cx: x + prep.w / 2, cy: y + prep.h / 2 });
       n++;
     }
+    // A part wider than the bed never starts a row. Stop instead of spinning empty rows.
+    if (n === before) break;
     row++;
   }
   let w = 0,
@@ -115,9 +118,88 @@ export function packObjects(
   }
 
   const b = placed.length ? footprintOf(placed) : { w: 0, h: 0, minX: 0, minY: 0, maxX: 0, maxY: 0 };
-  const fits = b.maxX <= bedW - mx + 1e-4 && b.maxY <= bedH - my + 1e-4 && b.minX >= mx - 1e-4 && b.minY >= my - 1e-4;
+  const layout = assessPlacement(
+    placed,
+    objects.map((o, index) => ({ index, letter: o.letter, count: o.count })),
+    bedW,
+    bedH,
+    mx,
+    my,
+  );
 
-  return { placed, usedW: b.w, usedH: b.h, fits };
+  return { placed, usedW: b.w, usedH: b.h, fits: layout.fits };
+}
+
+export interface PlacementRequest {
+  index: number;
+  letter: string;
+  count: number;
+}
+
+export interface PlacementAssessment {
+  fits: boolean;
+  /** Spanish messages. Non-empty iff `fits` is false. */
+  blockers: string[];
+}
+
+/**
+ * `fits` only when every requested piece was placed, each pocket stays inside the
+ * bed margins, and pockets do not overlap. Call this after moves: packing alone
+ * does not see imported or dragged positions.
+ */
+export function assessPlacement(
+  placed: PlacedPiece[],
+  requested: PlacementRequest[],
+  bedW: number,
+  bedH: number,
+  marginX: number,
+  marginY: number,
+): PlacementAssessment {
+  const blockers: string[] = [];
+  const missing: string[] = [];
+  for (const req of requested) {
+    const got = placed.filter((p) => p.obj === req.index).length;
+    const miss = req.count - got;
+    if (miss > 0) missing.push(`${req.letter} ×${miss}`);
+  }
+  if (missing.length) blockers.push(`Faltan: ${missing.join(", ")}`);
+
+  const outside: string[] = [];
+  for (const p of placed) {
+    const box = p.loops.length ? bboxOf(p.loops) : { minX: p.x, minY: p.y, maxX: p.x + p.w, maxY: p.y + p.h, w: p.w, h: p.h };
+    if (
+      box.minX < marginX - 1e-3 ||
+      box.minY < marginY - 1e-3 ||
+      box.maxX > bedW - marginX + 1e-3 ||
+      box.maxY > bedH - marginY + 1e-3
+    ) {
+      outside.push(p.label);
+    }
+  }
+  if (outside.length) blockers.push(`Fuera de margen: ${outside.join(", ")}`);
+
+  const overlaps: string[] = [];
+  for (let i = 0; i < placed.length; i++) {
+    for (let j = i + 1; j < placed.length; j++) {
+      const a = placed[i];
+      const b = placed[j];
+      let depth = 0;
+      const loopsA = a.loops.length ? a.loops : [];
+      const loopsB = b.loops.length ? b.loops : [];
+      for (const la of loopsA) {
+        for (const lb of loopsB) {
+          if (!loopsOverlap(la, lb)) continue;
+          depth = Math.max(depth, loopsOverlapDepth(la, lb));
+        }
+      }
+      if (depth > 0.05) {
+        overlaps.push(`${a.label} y ${b.label} (${Math.round(depth)} mm)`);
+      }
+    }
+  }
+  if (overlaps.length) blockers.push(`Solape: ${overlaps.join(", ")}`);
+
+  return { fits: blockers.length === 0, blockers };
 }
 
 export function shiftPiece(p: PlacedPiece, dx: number, dy: number) {

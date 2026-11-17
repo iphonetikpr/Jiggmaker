@@ -203,6 +203,11 @@ export interface JigResult {
   }>;
   totalUnits: number;
   fits: boolean;
+  /**
+   * Manufacturing export is blocked while this is non-empty.
+   * Layout failures (missing pieces, overlap, margin) set `fits` false as well.
+   */
+  blockers: string[];
   partHeight: number;
   bed: BedSize;
   plateName: string;
