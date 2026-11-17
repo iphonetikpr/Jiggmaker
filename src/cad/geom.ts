@@ -165,6 +165,42 @@ export function loopsOverlapDepth(a: Loop, b: Loop): number {
   return Math.min(ox, oy);
 }
 
+/** Even nesting depth: outers and islands. Odd depth: holes. */
+export function classifyContours(loops: Loop[]): { outers: Loop[]; holes: Loop[] } {
+  const ranked = loops.filter((loop) => loop.length >= 3).map((loop) => ({ loop, abs: Math.abs(polyArea(loop)) }));
+  const depth = ranked.map(() => 0);
+  for (let i = 0; i < ranked.length; i++) {
+    const probe = interiorProbe(ranked[i].loop);
+    if (!probe) continue;
+    for (let j = 0; j < ranked.length; j++) {
+      if (i === j || ranked[j].abs <= ranked[i].abs + 1e-4) continue;
+      if (pointInPoly(probe, ranked[j].loop)) depth[i]++;
+    }
+  }
+  const outers: Loop[] = [];
+  const holes: Loop[] = [];
+  ranked.forEach((item, i) => {
+    if (depth[i] % 2 === 1) holes.push(item.loop);
+    else outers.push(item.loop);
+  });
+  return { outers, holes };
+}
+
+function interiorProbe(loop: Loop): Pt | null {
+  const box = bboxOf([loop]);
+  const center: Pt = [(box.minX + box.maxX) / 2, (box.minY + box.maxY) / 2];
+  if (pointInPoly(center, loop)) return center;
+  let x = 0,
+    y = 0;
+  for (const p of loop) {
+    x += p[0];
+    y += p[1];
+  }
+  const mean: Pt = [x / loop.length, y / loop.length];
+  if (pointInPoly(mean, loop)) return mean;
+  return null;
+}
+
 export function pointInPoly(pt: Pt, loop: Loop): boolean {
   const [x, y] = pt;
   let inside = false;

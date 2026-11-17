@@ -158,6 +158,53 @@ export function makeLStl(d = 8): ArrayBuffer {
   return mergeBinaryStl([makeBoxStl(40, 15, d), makeBoxStl(15, 30, d)]);
 }
 
+/** Square ring prism. Default 30×30×8 mm with a centered 10×10 opening. */
+export function makeRingStl(outer = 30, hole = 10, depth = 8): ArrayBuffer {
+  const z0 = 0;
+  const z1 = depth;
+  const i0 = (outer - hole) / 2;
+  const i1 = i0 + hole;
+  const O = [
+    [0, 0],
+    [outer, 0],
+    [outer, outer],
+    [0, outer],
+  ];
+  const I = [
+    [i0, i0],
+    [i1, i0],
+    [i1, i1],
+    [i0, i1],
+  ];
+  const faces: Array<[Xyz, Xyz, Xyz]> = [];
+  const frame = (z: number, up: boolean) => {
+    const o = O.map(([x, y]) => [x, y, z] as Xyz);
+    const inn = I.map(([x, y]) => [x, y, z] as Xyz);
+    for (let k = 0; k < 4; k++) {
+      const j = (k + 1) % 4;
+      if (up) faces.push([o[k], o[j], inn[j]], [o[k], inn[j], inn[k]]);
+      else faces.push([o[k], inn[j], o[j]], [o[k], inn[k], inn[j]]);
+    }
+  };
+  const wall = (poly: number[][], inward: boolean) => {
+    for (let k = 0; k < poly.length; k++) {
+      const a = poly[k];
+      const b = poly[(k + 1) % poly.length];
+      const A: Xyz = [a[0], a[1], z0];
+      const B: Xyz = [b[0], b[1], z0];
+      const C: Xyz = [b[0], b[1], z1];
+      const D: Xyz = [a[0], a[1], z1];
+      if (!inward) faces.push([A, B, C], [A, C, D]);
+      else faces.push([A, C, B], [A, D, C]);
+    }
+  };
+  frame(z0, false);
+  frame(z1, true);
+  wall(O, false);
+  wall(I, true);
+  return facesToBinaryStl(faces);
+}
+
 type Xyz = [number, number, number];
 
 /**

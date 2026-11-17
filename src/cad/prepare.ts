@@ -1,6 +1,6 @@
 import { DEFAULTS, OBJECT_COLORS } from "../constants";
 import type { HolesMode, JobObject, Loop, PreparedObject, StlMesh } from "../types";
-import { inflatedRect, originLoops, translateLoop } from "./geom";
+import { classifyContours, inflatedRect, originLoops, translateLoop } from "./geom";
 import { clipToDepth, loopsArea, projectStl, silhouetteLoops, type Projected } from "./project";
 import { parseSTL } from "./stl";
 
@@ -19,15 +19,23 @@ function inFrame(loops: Loop[], ox: number, oy: number): Loop[] {
  * the band enlarges the slot so the part can seat. The part bbox stays the
  * layout footprint.
  */
+function frameOf(loops: Loop[], ox: number, oy: number): Loop[] {
+  return inFrame(loops, ox, oy);
+}
+
 function seatLoops(proj: Projected, mode: JobObject["mode"], clearance: number, pocketDepth: number) {
   const fullClear = mode === "rectangle" ? inflatedRect(proj.bbox, clearance) : silhouetteLoops(proj, clearance);
   const fullArt = mode === "rectangle" ? inflatedRect(proj.bbox, 0) : silhouetteLoops(proj, 0);
-  const fallback = fullClear.length ? fullClear : inflatedRect(proj.bbox, clearance);
+  const clearClass = classifyContours(fullClear);
+  const artClass = classifyContours(fullArt);
+  const fallback = clearClass.outers.length ? clearClass.outers : fullClear.length ? fullClear : inflatedRect(proj.bbox, clearance);
   const centered = originLoops(fallback);
-  const artSrc = fullArt.length ? fullArt : centered.loops;
+  const artSrc = artClass.outers.length ? artClass.outers : fullArt.length ? fullArt : centered.loops;
   const art = originLoops(artSrc);
   let loops = centered.loops;
+  let holes = frameOf(clearClass.holes, centered.ox, centered.oy);
   let artLoops = art.loops.map((l) => translateLoop(l, art.ox - centered.ox, art.oy - centered.oy));
+  let artHoles = frameOf(artClass.holes, centered.ox, centered.oy);
 
   const depth = pocketDepth;
   if (mode === "silhouette" && depth > 0 && depth < proj.partHeight - 0.05) {
@@ -41,13 +49,18 @@ function seatLoops(proj: Projected, mode: JobObject["mode"], clearance: number, 
         // A plate-sized grid is coarser than 0.2 mm, which would swallow the clearance.
         const bandPocket = silhouetteLoops(band, slotClear, slotClear / 2);
         const pockets = bandPocket.length ? bandPocket : bandArt;
-        loops = inFrame(pockets, centered.ox, centered.oy);
-        artLoops = inFrame(bandArt, centered.ox, centered.oy);
+        const pocketClass = classifyContours(pockets);
+        const bandArtClass = classifyContours(bandArt);
+        const outers = pocketClass.outers.length ? pocketClass.outers : pockets;
+        loops = frameOf(outers, centered.ox, centered.oy);
+        holes = frameOf(pocketClass.holes, centered.ox, centered.oy);
+        artLoops = frameOf(bandArtClass.outers.length ? bandArtClass.outers : bandArt, centered.ox, centered.oy);
+        artHoles = frameOf(bandArtClass.holes, centered.ox, centered.oy);
       }
     }
   }
 
-  return { loops, artLoops, centered };
+  return { loops, holes, artLoops, artHoles, centered };
 }
 
 const stlCache = new WeakMap<ArrayBuffer, StlMesh>();
@@ -102,9 +115,9 @@ export function prepareObject(
       letter,
       color,
       loops,
-      holes: [],
+      holes: seated.holes,
       artLoops,
-      artHoles: [],
+      artHoles: seated.artHoles,
       holesMode: obj.holes as HolesMode,
       w: centered.w,
       h: centered.h,

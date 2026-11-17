@@ -1,14 +1,15 @@
-import { FRAME_PLATE } from "../constants";
+import { FRAME_PLATE, PICK_OUT_SIDE_MM } from "../constants";
 import type { BedSize, Entity, JobObject, JobSettings, JigResult, Loop, PlacedPiece } from "../types";
-import { bboxOf, rectLoop, roundedRectLoop, translateLoop } from "./geom";
+import { bboxOf, pointInPoly, pointSegDistance, rectLoop, roundedRectLoop, translateLoop } from "./geom";
 import { applyMoves, assessPlacement, footprintOf, packObjects } from "./layout";
-import { extrudePlate, plateMeshXform, solidHeight } from "./mesh";
+import { extrudePlate, meshSingleIncidenceEdges, plateMeshXform, solidHeight } from "./mesh";
 import { bedFromSettings, plateLabel } from "./filename";
 import { paintSafeGuideEntity, paintSafeLoops, templateOuterLoops } from "./paintSafe";
 import { leadInDepth } from "./leadIn";
 import { applyFingerNotches } from "./notch";
 import { prepareObject } from "./prepare";
-import { planPlateSplits } from "./split";
+import { buildSplitMeshes, planPlateSplits } from "./split";
+import { wallBlockers } from "./walls";
 
 /** Keep a margin box inside [0, limit]. A box larger than the limit fills it. */
 function clampSpan(origin: number, size: number, limit: number): { origin: number; size: number } {
@@ -33,6 +34,23 @@ function addReg(entities: Entity[]) {
 
 function outlineEntity(loop: Loop): Entity {
   return { layer: "OUTLINE", points: loop, closed: true, strokeWidth: 0.25 };
+}
+
+/** Circle of radius r stays at least `side` mm inside the pocket, and not inside a boss. */
+function pickFits(loops: Loop[], holes: Loop[], cx: number, cy: number, r: number, side: number): boolean {
+  const host = loops.find((loop) => pointInPoly([cx, cy], loop));
+  if (!host) return false;
+  if (holes.some((loop) => pointInPoly([cx, cy], loop))) return false;
+  const need = r + side;
+  const rings = [host, ...holes];
+  for (const loop of rings) {
+    for (let i = 0; i < loop.length; i++) {
+      const a = loop[i];
+      const b = loop[(i + 1) % loop.length];
+      if (pointSegDistance([cx, cy], a, b) < need - 1e-4) return false;
+    }
+  }
+  return true;
 }
 
 export function generateJig(
@@ -123,24 +141,29 @@ export function generateJig(
   addReg(baseEntities);
   addReg(pocketEntities);
 
+  const pickNotes: string[] = [];
+  const pickByLabel = new Map<string, { cx: number; cy: number; r: number }>();
   for (const p of placed) {
     for (const loop of plateLoops(p)) {
       pocketEntities.push({ layer: "CUT", points: loop, closed: true, strokeWidth: 0.2 });
     }
-    if (p.hmode === "jig" || p.hmode === "all") {
-      for (const loop of plateHoles(p)) {
-        pocketEntities.push({ layer: "CUT", points: loop, closed: true, strokeWidth: 0.2 });
-      }
+    if (!settings.pickOut) continue;
+    const cx = p.cx + plateDx;
+    const cy = p.cy + plateDy;
+    const r = settings.pickDia / 2;
+    const holes = p.hmode === "jig" || p.hmode === "all" ? plateHoles(p) : [];
+    if (!pickFits(plateLoops(p), holes, cx, cy, r, PICK_OUT_SIDE_MM)) {
+      pickNotes.push(p.label);
+      continue;
     }
-    if (settings.pickOut) {
-      pocketEntities.push({
-        type: "circle",
-        layer: "CUT",
-        cx: p.cx + plateDx,
-        cy: p.cy + plateDy,
-        r: settings.pickDia / 2,
-      });
-    }
+    pickByLabel.set(p.label, { cx, cy, r });
+    baseEntities.push({
+      type: "circle",
+      layer: "CUT",
+      cx,
+      cy,
+      r,
+    });
   }
 
   for (const p of placed) {
@@ -221,7 +244,7 @@ export function generateJig(
     return {
       loops,
       holes: p.hmode === "jig" || p.hmode === "all" ? plateHoles(p) : [],
-      pick: settings.pickOut ? { cx: p.cx + plateDx, cy: p.cy + plateDy, r: settings.pickDia / 2 } : null,
+      pick: pickByLabel.get(p.label) ?? null,
       leadIn: leadIns[0] ?? 0,
       leadIns,
     };
@@ -234,19 +257,41 @@ export function generateJig(
 
   const maxBed = settings.maxPrintBed || 250;
   const oversized = jigW > maxBed + 1e-6 || jigH > maxBed + 1e-6;
-  const splits = settings.splitPlate && oversized ? planPlateSplits(jigW, jigH, maxBed) : [];
+  const splitPlan =
+    settings.splitPlate && oversized ? planPlateSplits(jigW, jigH, maxBed, meshPockets.flatMap((p) => p.loops)) : null;
+  const splits = splitPlan?.splits ?? [];
 
-  const notes: string[] = [...layout.blockers];
-  if (layout.fits && oversized) {
+  const blockers = [
+    ...layout.blockers,
+    ...wallBlockers(
+      placed.map((p) => ({
+        label: p.label,
+        clearance: objects[p.obj]?.clear ?? 0,
+        leadIn: objects[p.obj]?.leadIn !== false,
+        loops: plateLoops(p),
+      })),
+      jigW,
+      jigH,
+    ),
+  ];
+  if (splitPlan?.blocked) blockers.push(splitPlan.blocked);
+
+  const notes: string[] = [...blockers];
+  if (layout.fits && oversized && !splitPlan?.blocked) {
     notes.push(
       settings.splitPlate
         ? `Placa ${jigW.toFixed(0)}×${jigH.toFixed(0)} mm > ${maxBed} mm: split en ${splits.length || 2} piezas (o imprime en H2).`
         : `Placa ${jigW.toFixed(0)}×${jigH.toFixed(0)} mm > cama FDM ${maxBed} mm. Por defecto se asume H2 (250×250×250+). Activa split para dividir, o imprime en una H2.`,
     );
   }
+  if (pickNotes.length) {
+    notes.push(
+      `Pick-out Ø${settings.pickDia} no cabe en ${pickNotes.join(", ")} (hacen falta ${PICK_OUT_SIDE_MM} mm por lado). Se omite.`,
+    );
+  }
   const warn = notes.length ? notes.join("\n") : null;
 
-  return {
+  const result: JigResult = {
     placed,
     jig: { w: jigW, h: jigH, cornerR },
     template: { entities: templateEntities, bed },
@@ -264,7 +309,7 @@ export function generateJig(
     })),
     totalUnits: placed.length,
     fits: layout.fits,
-    blockers: layout.blockers,
+    blockers,
     partHeight: prepped.length ? Math.max(...prepped.map((o) => o.partHeight)) : 0,
     bed,
     plateName: plateLabel(settings),
@@ -283,6 +328,18 @@ export function generateJig(
     pocketDepth,
     notchWarn: notchWarnings.length ? notchWarnings.join(" ") : null,
   };
+
+  const openEdges = splits.length
+    ? buildSplitMeshes(result).reduce((sum, piece) => sum + meshSingleIncidenceEdges(piece.mesh), 0)
+    : meshSingleIncidenceEdges(mesh);
+  if (openEdges > 0) {
+    const msg = splits.length
+      ? `STL dividido con ${openEdges} aristas abiertas. No se exporta.`
+      : `STL con ${openEdges} aristas abiertas. No se exporta.`;
+    result.blockers.push(msg);
+    result.warn = result.warn ? `${result.warn} ${msg}` : msg;
+  }
+  return result;
 }
 
 export function splitMeshX(

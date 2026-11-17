@@ -27,8 +27,8 @@ export const DEFAULTS = {
   slotClearance: 0.2,
   spacingX: 5,
   spacingY: 5,
-  marginX: 2,
-  marginY: 2,
+  marginX: 3,
+  marginY: 3,
   objGap: 10,
   offsetPct: 50,
   pickDia: 8,
@@ -155,6 +155,14 @@ export const TEST_STRIP = {
 export const FINGER_NOTCH_DIA = 14;
 /** Skip the notch when the remaining wall to another pocket would be under this. */
 export const FINGER_NOTCH_MIN_WALL = 1.5;
+/**
+ * Wall from a pocket seat to the jig edge, and between pocket seats,
+ * must be at least clearance + lead-in chamfer + this extra (mm).
+ */
+export const MIN_WALL_EXTRA_MM = 2;
+/** Pick-out hole must sit at least this far inside the pocket wall. */
+export const PICK_OUT_SIDE_MM = 2;
+
 /** 45° mouth chamfer. Horizontal offset equals this depth. */
 export const LEAD_IN_MM = 0.6;
 /** Used when the pocket's narrower side is under LEAD_IN_NARROW_BELOW. */

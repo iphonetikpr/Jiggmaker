@@ -1,7 +1,7 @@
 import earcut from "earcut";
 import { POCKET_DEPTH_EXTRA, SCALE_COMP } from "../constants";
 import type { Loop, MeshPocket, Pt, Tri } from "../types";
-import { circleLoop, ensureCCW, ensureCW, loopSelfIntersects, offsetLoop, polyArea } from "./geom";
+import { circleLoop, ensureCCW, ensureCW, loopSelfIntersects, offsetLoop, pointInPoly, polyArea } from "./geom";
 
 function flatten(outer: Loop, holes: Loop[]): { vertices: number[]; holeIndices: number[] } {
   const vertices: number[] = [];
@@ -131,8 +131,7 @@ export function meshBBox(tris: Tri[]): { minX: number; minY: number; minZ: numbe
   return { minX, minY, minZ, maxX, maxY, maxZ };
 }
 
-/** Count edges not shared by exactly two triangles (0 ⇒ closed 2-manifold). */
-export function meshNonManifoldEdges(tris: Tri[]): number {
+function edgeUses(tris: Tri[]): Map<string, number> {
   const uses = new Map<string, number>();
   const q = (n: number) => Math.round(n * 1e5) / 1e5;
   const vk = (x: number, y: number, z: number) => `${q(x)},${q(y)},${q(z)}`;
@@ -145,10 +144,24 @@ export function meshNonManifoldEdges(tris: Tri[]): number {
       uses.set(k, (uses.get(k) || 0) + 1);
     }
   }
+  return uses;
+}
+
+/** Count edges not shared by exactly two triangles (0 ⇒ closed 2-manifold). */
+export function meshNonManifoldEdges(tris: Tri[]): number {
   let bad = 0;
-  for (const c of uses.values()) if (c !== 2) bad++;
+  for (const c of edgeUses(tris).values()) if (c !== 2) bad++;
   return bad;
 }
+
+/** Boundary edges (used by one triangle). Accepted STLs must return 0. */
+export function meshSingleIncidenceEdges(tris: Tri[]): number {
+  let one = 0;
+  for (const c of edgeUses(tris).values()) if (c === 1) one++;
+  return one;
+}
+
+type Boss = { top: Loop; foot: Loop };
 
 type Cavity = {
   mouth: Loop;
@@ -158,6 +171,8 @@ type Cavity = {
   through: boolean;
   picks: Loop[];
   pickWalls: boolean;
+  /** Solid columns filling part holes (jig boss). Vertical from the floor to the top face. */
+  bosses: Boss[];
 };
 
 /** Sloped 45° band from the wider mouth down to the clearance seat. */
@@ -215,7 +230,23 @@ function cavityOf(loop: Loop, leadIn: number, topZ: number, floorZ: number, thro
     if (grown && grown.length === seat.length && !loopSelfIntersects(grown)) mouth = ensureCCW(grown);
     else lead = 0;
   }
-  return { mouth, seat, floorZ: through ? 0 : floorZ, seatZ: topZ - lead, through, picks: [], pickWalls: false };
+  return { mouth, seat, floorZ: through ? 0 : floorZ, seatZ: topZ - lead, through, picks: [], pickWalls: false, bosses: [] };
+}
+
+function bossesInside(host: Loop, holes: Loop[]): Boss[] {
+  const bosses: Boss[] = [];
+  for (const hole of holes) {
+    if (!hole || hole.length < 3) continue;
+    const box = hole.reduce(
+      (acc, [x, y]) => ({ minX: Math.min(acc.minX, x), minY: Math.min(acc.minY, y), maxX: Math.max(acc.maxX, x), maxY: Math.max(acc.maxY, y) }),
+      { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity },
+    );
+    const probe: Pt = [(box.minX + box.maxX) / 2, (box.minY + box.maxY) / 2];
+    if (!pointInPoly(probe, host)) continue;
+    const foot = ensureCCW(hole);
+    bosses.push({ top: foot, foot });
+  }
+  return bosses;
 }
 
 export function extrudePlate(
@@ -237,10 +268,12 @@ export function extrudePlate(
     const explicit = typeof p.depth === "number" && p.depth > 0;
     const floorZ = explicit ? Math.max(0.05, topZ - p.depth!) : defaultFloor;
     const openThrough = !explicit && throughPlate;
+    const holes = p.holes || [];
     let first = true;
     p.loops.forEach((loop, i) => {
       if (!loop || loop.length < 3) return;
       const cavity = cavityOf(loop, p.leadIns?.[i] ?? p.leadIn ?? 0, topZ, floorZ, openThrough);
+      cavity.bosses = bossesInside(loop, holes);
       if (!explicit) {
         cavity.picks = picks;
         cavity.pickWalls = first;
@@ -268,9 +301,18 @@ export function extrudePlate(
     if (c.seatZ < topZ - 1e-4) chamferWalls(out, c.mouth, c.seat, topZ, c.seatZ);
     if (c.through) {
       ringWalls(out, c.seat, 0, c.seatZ, false);
+      for (const boss of c.bosses) {
+        ringWalls(out, boss.foot, 0, topZ, true);
+        cap(out, boss.top, [], topZ, true);
+        cap(out, boss.foot, [], 0, false);
+      }
     } else {
-      cap(out, c.seat, c.picks, c.floorZ, true);
+      cap(out, c.seat, [...c.bosses.map((b) => b.foot), ...c.picks], c.floorZ, true);
       ringWalls(out, c.seat, c.floorZ, c.seatZ, false);
+      for (const boss of c.bosses) {
+        ringWalls(out, boss.foot, c.floorZ, topZ, true);
+        cap(out, boss.top, [], topZ, true);
+      }
       if (c.pickWalls) {
         for (const hole of c.picks) ringWalls(out, hole, 0, c.floorZ, false);
       }

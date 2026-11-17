@@ -30,22 +30,85 @@ export interface DowelSite {
   role: "male" | "female";
 }
 
-function cutsForAxis(length: number, maxBed: number): number[] {
-  if (length <= maxBed + 1e-6) return [0, length];
-  const n = Math.max(2, Math.ceil(length / maxBed));
-  const out = [0];
-  for (let i = 1; i < n; i++) out.push((length * i) / n);
-  out.push(length);
-  return out;
+/** A cut is illegal when this band around it enters a pocket. Keeps the Ø3 pin out of the cavity. */
+const SPLIT_CUT_PAD = SPLIT_OVERLAP;
+
+function axisHitsInterior(loop: Loop, axis: "x" | "y", at: number): boolean {
+  const box = bboxOf([loop]);
+  const min = axis === "x" ? box.minX : box.minY;
+  const max = axis === "x" ? box.maxX : box.maxY;
+  if (at <= min + 0.02 || at >= max - 0.02) return false;
+  for (let i = 0; i < loop.length; i++) {
+    const a = axis === "x" ? loop[i][0] : loop[i][1];
+    const b = axis === "x" ? loop[(i + 1) % loop.length][0] : loop[(i + 1) % loop.length][1];
+    if ((a < at && b > at) || (b < at && a > at)) return true;
+  }
+  return false;
 }
 
-/** Split every axis that exceeds maxPrintBed so each piece fits the FDM cube. */
-export function planPlateSplits(jigW: number, jigH: number, maxBed: number): PlateSplit[] {
-  const xs = cutsForAxis(jigW, maxBed);
-  const ys = cutsForAxis(jigH, maxBed);
+function cutHitsPocket(loops: Loop[], axis: "x" | "y", at: number, pad: number): boolean {
+  const samples = 4;
+  for (let i = 0; i <= samples; i++) {
+    const s = at - pad + ((2 * pad) * i) / samples;
+    if (loops.some((loop) => axisHitsInterior(loop, axis, s))) return true;
+  }
+  return false;
+}
+
+function nearestClearCut(ideal: number, minC: number, maxC: number, blocked: (at: number) => boolean): number | null {
+  if (!(maxC >= minC - 1e-6)) return null;
+  const lo = minC;
+  const hi = maxC;
+  const span = Math.max(ideal - lo, hi - ideal, 0);
+  for (let d = 0; d <= span + 0.51; d += 0.5) {
+    const candidates = d === 0 ? [ideal] : [ideal - d, ideal + d];
+    for (const raw of candidates) {
+      if (raw < lo - 1e-6 || raw > hi + 1e-6) continue;
+      const at = Math.min(hi, Math.max(lo, raw));
+      if (!blocked(at)) return at;
+    }
+  }
+  return null;
+}
+
+function cutsForAxis(length: number, maxBed: number, axis: "x" | "y", obstacles: Loop[]): number[] | null {
+  if (length <= maxBed + 1e-6) return [0, length];
+  const n = Math.max(2, Math.ceil(length / maxBed));
+  const cuts = [0];
+  for (let i = 1; i < n; i++) {
+    const ideal = (length * i) / n;
+    const minC = Math.max(cuts[i - 1] + 1, length - (n - i) * maxBed);
+    const maxC = Math.min(length - 1, i * maxBed);
+    const at = nearestClearCut(ideal, minC, maxC, (c) => cutHitsPocket(obstacles, axis, c, SPLIT_CUT_PAD));
+    if (at == null) return null;
+    cuts.push(at);
+  }
+  cuts.push(length);
+  for (let i = 1; i < cuts.length; i++) {
+    if (cuts[i] - cuts[i - 1] > maxBed + 1e-4) return null;
+  }
+  return cuts;
+}
+
+export interface SplitPlan {
+  splits: PlateSplit[];
+  /** Set when a required cut has no free strip that misses every pocket. */
+  blocked: string | null;
+}
+
+/** Split every axis that exceeds maxPrintBed. Cuts slide to the nearest strip that misses pockets. */
+export function planPlateSplits(jigW: number, jigH: number, maxBed: number, obstacles: Loop[] = []): SplitPlan {
+  const xs = cutsForAxis(jigW, maxBed, "x", obstacles);
+  const ys = cutsForAxis(jigH, maxBed, "y", obstacles);
+  if (!xs || !ys) {
+    return {
+      splits: [],
+      blocked: "Split: el corte atravesaría un pocket y no hay franja libre. No se divide.",
+    };
+  }
   const nx = xs.length - 1;
   const ny = ys.length - 1;
-  if (nx * ny <= 1) return [];
+  if (nx * ny <= 1) return { splits: [], blocked: null };
   const splits: PlateSplit[] = [];
   const n = nx * ny;
   let i = 0;
@@ -65,7 +128,7 @@ export function planPlateSplits(jigW: number, jigH: number, maxBed: number): Pla
       });
     }
   }
-  return splits;
+  return { splits, blocked: null };
 }
 
 function distToSeg(p: Pt, a: Pt, b: Pt): number {
