@@ -19,6 +19,7 @@ import {
   b64ToBytes,
   defaultSettings,
   deleteHistoryJob,
+  historyImportMessage,
   importHistoryJobs,
   loadHistory,
   newObject,
@@ -311,7 +312,7 @@ export default function App() {
           return;
         }
         setHistory(imported.jobs);
-        alert("Importados " + imported.added + " job" + (imported.added === 1 ? "" : "s") + ".");
+        alert(historyImportMessage(imported.added));
       } catch (e) {
         alert("No se pudo leer el archivo: " + ((e as Error).message || e));
       }

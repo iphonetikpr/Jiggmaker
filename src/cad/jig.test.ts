@@ -3,7 +3,7 @@ import { DEFAULTS, FRAME_PLATE, HISTORY_KEY, MINI_BED, POCKET_DEPTH_EXTRA, SCALE
 import { toDXF } from "./dxf";
 import { exportBasename } from "./filename";
 import { generateJig } from "./generate";
-import { applyHistorySettings, defaultSettings, deleteHistoryJob, HISTORY_SAVE_FAILED, importHistoryJobs, loadHistory, mergeImported, newObject, saveHistory, serializeJob } from "./history";
+import { applyHistorySettings, defaultSettings, deleteHistoryJob, HISTORY_SAVE_FAILED, historyImportMessage, importHistoryJobs, loadHistory, mergeImported, newObject, saveHistory, serializeJob } from "./history";
 import { toAsciiSTL, toBinarySTL } from "./mesh";
 import { toSVG } from "./svg";
 import { makeBoxStl, makeLStl, parseSTL } from "./stl";
@@ -225,6 +225,12 @@ describe("history", () => {
     expect(restored.maxPrintBed).toBe(250);
     const { added } = mergeImported([], incoming);
     expect(added).toBe(1);
+  });
+
+  it("names imported jobs as trabajos and tells the user to export when storage is full", () => {
+    expect(historyImportMessage(1)).toBe("Importados 1 trabajo.");
+    expect(historyImportMessage(3)).toBe("Importados 3 trabajos.");
+    expect(HISTORY_SAVE_FAILED).toBe("No se pudo guardar el historial (almacén lleno). Exporta a JSON.");
   });
 
   it("does not report a saved history when localStorage rejects the write", () => {

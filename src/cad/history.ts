@@ -169,7 +169,11 @@ export function applyHistorySettings(raw: Record<string, unknown> | HistoryJob["
   return normalizeSettings(s);
 }
 
-export const HISTORY_SAVE_FAILED = "No se pudo guardar el historial (almacén lleno).";
+export const HISTORY_SAVE_FAILED = "No se pudo guardar el historial (almacén lleno). Exporta a JSON.";
+
+export function historyImportMessage(added: number): string {
+  return `Importados ${added} ${added === 1 ? "trabajo" : "trabajos"}.`;
+}
 
 export function storeHistory(jobs: HistoryJob[]): { ok: true; jobs: HistoryJob[] } | { ok: false; error: string } {
   if (!saveHistory(jobs)) return { ok: false, error: HISTORY_SAVE_FAILED };

@@ -10,6 +10,7 @@ import {
   formatMm,
   summaryBedLine,
   summaryJigSize,
+  summaryObjectMeta,
   summaryPlateHint,
   summaryStlCompensated,
   summaryStlNominal,
@@ -62,6 +63,7 @@ describe("summary helpers", () => {
     obj.count = 1;
     const result = generateJig([obj], {}, defaultSettings(), {});
     expect(formatMm(result.objects[0].nominalW)).toBe("1.5");
+    expect(summaryObjectMeta(1, 50, 30, 50.3, 30.3)).toBe("×1 · 50×30 mm · pocket 50.3×30.3 mm");
     expect(formatMm(result.objects[0].nominalH)).toBe("30");
     expect(result.objects[0].w).toBeCloseTo(1.5 + 2 * DEFAULTS.clearance, 5);
     expect(summaryStlNominal(result)).not.toBe(summaryStlCompensated(result));

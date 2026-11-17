@@ -1,5 +1,5 @@
 import type { JigResult } from "../types";
-import { formatMm, summaryBedLine, summaryJigSize, summaryPlateHint, summaryStlCompensated, summaryStlNominal, thinBaseWarning, truncateName } from "./summary";
+import { formatMm, summaryBedLine, summaryJigSize, summaryObjectMeta, summaryPlateHint, summaryStlCompensated, summaryStlNominal, thinBaseWarning, truncateName } from "./summary";
 
 export function SummaryCard({ result }: { result: JigResult }) {
   const hint = summaryPlateHint(result);
@@ -30,12 +30,7 @@ export function SummaryCard({ result }: { result: JigResult }) {
             <span className="sum-obj-name">
               {o.letter} {truncateName(o.name)}
             </span>
-            <span className="sum-obj-meta">
-              ×{o.placed} · {formatMm(o.nominalW)}×{formatMm(o.nominalH)} mm
-              {Math.abs(o.w - o.nominalW) > 0.049 || Math.abs(o.h - o.nominalH) > 0.049
-                ? ` · pocket ${formatMm(o.w)}×${formatMm(o.h)}`
-                : ""}
-            </span>
+            <span className="sum-obj-meta">{summaryObjectMeta(o.placed, o.nominalW, o.nominalH, o.w, o.h)}</span>
           </div>
         ))}
       </div>

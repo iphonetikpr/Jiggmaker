@@ -1,5 +1,8 @@
 import { FRAME_PLATE, THIN_BASE_MM, THIN_JIG_SPAN_MM } from "../constants";
 import type { JigResult, UpAxis } from "../types";
+import { formatMm } from "../cad/format";
+
+export { formatMm };
 
 export const FLIP_UP: Record<UpAxis, UpAxis> = {
   "z+": "z-",
@@ -14,12 +17,13 @@ export function flipUp(up: UpAxis): UpAxis {
   return FLIP_UP[up];
 }
 
-/** Up to `digits` decimals, without trailing zeros. 1.5 stays 1.5; 30 stays 30. */
-export function formatMm(n: number, digits = 2): string {
-  if (!Number.isFinite(n)) return "0";
-  const factor = 10 ** digits;
-  const rounded = Math.round(n * factor) / factor;
-  return String(rounded);
+/** Object row: nominal size, and the clearance pocket when it differs. */
+export function summaryObjectMeta(placed: number, nominalW: number, nominalH: number, pocketW: number, pocketH: number): string {
+  const nominal = `×${placed} · ${formatMm(nominalW)}×${formatMm(nominalH)} mm`;
+  if (Math.abs(pocketW - nominalW) > 0.049 || Math.abs(pocketH - nominalH) > 0.049) {
+    return `${nominal} · pocket ${formatMm(pocketW)}×${formatMm(pocketH)} mm`;
+  }
+  return nominal;
 }
 
 /** Bed line in the Summary card, e.g. "Mini · 333 × 88 mm". */
