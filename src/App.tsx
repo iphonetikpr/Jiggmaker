@@ -50,6 +50,7 @@ import { SummaryCard } from "./ui/SummaryCard";
 import { thinBaseWarning } from "./ui/summary";
 import { ThemeToggle } from "./ui/ThemeToggle";
 import { PresetPanel } from "./ui/PresetPanel";
+import { FrameDownload } from "./ui/FrameDownload";
 
 export default function App() {
   const [step, setStep] = useState<StepId>("setup");
@@ -455,23 +456,26 @@ export default function App() {
                   </div>
                 )}
                 {mini && (
-                  <label className="chk">
-                    <input
-                      type="checkbox"
-                      checked={settings.useAdapter}
-                      onChange={(e) => patchSettings({ useAdapter: e.target.checked })}
-                    />
-                    <span>
-                      Jig para alignment frame
-                      {settings.useAdapter && <span className="pill">usando frame</span>}
-                    </span>
-                  </label>
-                )}
-                {settings.useAdapter && mini && (
-                  <p className="hint">
-                    Full bed imprime la placa 334 × 90 mm con esquinas redondeadas. Tight recorta solo el STL alrededor
-                    de las piezas más el margen. La plantilla sigue en cama Mini 333 × 88.
-                  </p>
+                  <>
+                    <label className="chk">
+                      <input
+                        type="checkbox"
+                        checked={settings.useAdapter}
+                        onChange={(e) => patchSettings({ useAdapter: e.target.checked })}
+                      />
+                      <span>
+                        Jig para alignment frame
+                        {settings.useAdapter && <span className="pill">usando frame</span>}
+                      </span>
+                    </label>
+                    {settings.useAdapter && (
+                      <p className="hint">
+                        Full bed imprime la placa 334 × 90 mm con esquinas redondeadas. Tight recorta solo el STL alrededor
+                        de las piezas más el margen. La plantilla sigue en cama Mini 333 × 88.
+                      </p>
+                    )}
+                    <FrameDownload />
+                  </>
                 )}
                 {!mini && (
                   <div className="stub">Large-frame system · próximamente (stub). Usa Large bed sin frame por ahora.</div>
@@ -814,6 +818,7 @@ export default function App() {
 
           <div className="card">
             <h2>Descargas</h2>
+            {mini && <FrameDownload />}
             <fieldset className="dlgrid" disabled={result.blockers.length > 0} aria-describedby={exportDescribedBy}>
               {offersSplitZip(result) && (
                 <button
@@ -953,7 +958,8 @@ export default function App() {
             <p>
               <b>2 · Cama y frame.</b> Mini 333×88, Large 333×418 o custom. En Mini, el checkbox de frame pasa la placa Full
               bed a 334×90 (esquinas redondeadas). Jig footprint Tight recorta solo el STL a las piezas más el margen; la
-              plantilla sigue a tamaño de cama. Large-frame queda stub.
+              plantilla sigue a tamaño de cama. Large-frame queda stub. Descargar marco (junto al checkbox y en
+              Descargas) baja las dos piezas STL del marco.
             </p>
             <p>
               <b>3 · Láser vs 3D.</b> Láser = 2 hojas (POCKET + BASE) del contorno de la placa, sin scaleComp. 3D = un STL;
