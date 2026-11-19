@@ -202,36 +202,81 @@ describe("geometry audit", () => {
     ]);
   });
 
-  it("keeps silhouette clearance on a ring and on an L", () => {
-    const ring = clearanceOf("ring", 0.15);
-    const ell = clearanceOf("ell", 0.15);
-    expect(ring.outer).toBeGreaterThanOrEqual(0.95 * 0.15);
-    expect(ring.inner).toBeGreaterThanOrEqual(0.95 * 0.15);
-    expect(ell.outer).toBeGreaterThanOrEqual(0.95 * 0.15);
+  it("keeps silhouette clearance at corners and edges, against the true outline and the template", () => {
+    const ring = measureClearance("ring", 0.15);
+    const ell = measureClearance("ell", 0.15);
+    const floor = 0.95 * 0.15;
+    for (const stats of [ring.outerTrue, ring.outerTemplate, ring.innerTrue, ring.innerTemplate, ell.outerTrue, ell.outerTemplate]) {
+      expect(stats.cornerSamples).toBeGreaterThan(0);
+      expect(stats.edgeSamples).toBeGreaterThan(0);
+      expect(stats.corner).toBeGreaterThanOrEqual(floor);
+      expect(stats.edge).toBeGreaterThanOrEqual(floor);
+    }
     expect(meshSingleIncidenceEdges(ring.mesh)).toBe(0);
     expect(meshSingleIncidenceEdges(ell.mesh)).toBe(0);
   });
 });
 
-function minEdgeDistance(loop: [number, number][], target: [number, number][]): number {
-  let best = Infinity;
-  for (const p of loop) {
-    for (let i = 0; i < target.length; i++) {
-      const a = target[i];
-      const b = target[(i + 1) % target.length];
+type SampleStats = { corner: number; edge: number; cornerSamples: number; edgeSamples: number };
+
+function sampleLoop(loop: [number, number][], step = 0.01): [number, number][] {
+  const pts: [number, number][] = [];
+  for (let i = 0; i < loop.length; i++) {
+    const a = loop[i];
+    const b = loop[(i + 1) % loop.length];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const n = Math.max(1, Math.ceil(len / step));
+    for (let k = 0; k < n; k++) {
+      const t = k / n;
+      pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+    }
+  }
+  return pts;
+}
+
+function nearestOnLoops(p: [number, number], loops: [number, number][][]): { dist: number; atVertex: boolean } {
+  let dist = Infinity;
+  let atVertex = false;
+  for (const loop of loops) {
+    for (let i = 0; i < loop.length; i++) {
+      const a = loop[i];
+      const b = loop[(i + 1) % loop.length];
       const dx = b[0] - a[0];
       const dy = b[1] - a[1];
       const len2 = dx * dx + dy * dy;
       let t = len2 < 1e-12 ? 0 : ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2;
       t = Math.max(0, Math.min(1, t));
-      best = Math.min(best, Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy)));
+      const d = Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+      if (d < dist - 1e-9) {
+        dist = d;
+        atVertex = t <= 0.02 || t >= 0.98;
+      }
     }
   }
-  return best;
+  return { dist, atVertex };
 }
 
-/** Pocket contour versus the true part outline, in the pocket's own frame. */
-function clearanceOf(kind: "ring" | "ell", clearance: number) {
+function clearanceStats(pocket: [number, number][][], reference: [number, number][][]): SampleStats {
+  let corner = Infinity;
+  let edge = Infinity;
+  let cornerSamples = 0;
+  let edgeSamples = 0;
+  for (const loop of pocket) {
+    for (const p of sampleLoop(loop, 0.01)) {
+      const hit = nearestOnLoops(p, reference);
+      if (hit.atVertex) {
+        cornerSamples++;
+        if (hit.dist < corner) corner = hit.dist;
+      } else {
+        edgeSamples++;
+        if (hit.dist < edge) edge = hit.dist;
+      }
+    }
+  }
+  return { corner, edge, cornerSamples, edgeSamples };
+}
+
+function measureClearance(kind: "ring" | "ell", clearance: number) {
   const buf = kind === "ring" ? makeRingStl() : makeLStl();
   const obj = newObject(0);
   obj.stlName = "part";
@@ -240,35 +285,49 @@ function clearanceOf(kind: "ring" | "ell", clearance: number) {
   obj.holes = "none";
   const result = generateJig([obj], { [obj.id]: buf }, settings({ marginX: 4, marginY: 4 }), {});
   const piece = result.placed[0];
-  const outer = piece.loops[0];
-  const box = bboxOf([outer]);
-  const cx = (box.minX + box.maxX) / 2;
-  const cy = (box.minY + box.maxY) / 2;
-  const idealOuter: [number, number][] =
-    kind === "ring"
-      ? [
-          [cx - 15, cy - 15],
-          [cx + 15, cy - 15],
-          [cx + 15, cy + 15],
-          [cx - 15, cy + 15],
-        ]
-      : [
-          [cx - 20, cy - 15],
-          [cx + 20, cy - 15],
-          [cx + 20, cy - 15 + 15],
-          [cx - 20 + 15, cy - 15 + 15],
-          [cx - 20 + 15, cy + 15],
-          [cx - 20, cy + 15],
-        ];
-  const idealHole: [number, number][] = [
-    [cx - 5, cy - 5],
-    [cx + 5, cy - 5],
-    [cx + 5, cy + 5],
-    [cx - 5, cy + 5],
-  ];
+  const shift = bedShift(piece.loops, clearance);
+  const ringOuter: [number, number][] = [
+    [0, 0],
+    [30, 0],
+    [30, 30],
+    [0, 30],
+  ].map(([x, y]) => [x + shift.x, y + shift.y]);
+  const ringHole: [number, number][] = [
+    [10, 10],
+    [20, 10],
+    [20, 20],
+    [10, 20],
+  ].map(([x, y]) => [x + shift.x, y + shift.y]);
+  const ellOuter: [number, number][] = [
+    [0, 0],
+    [40, 0],
+    [40, 15],
+    [15, 15],
+    [15, 30],
+    [0, 30],
+  ].map(([x, y]) => [x + shift.x, y + shift.y]);
+  const trueOuter = kind === "ring" ? [ringOuter] : [ellOuter];
+  const trueInner = kind === "ring" ? [ringHole] : [];
+  const pocketOuter = piece.loops;
+  const pocketInner = piece.holes;
+  const templateOuter = piece.art.length ? piece.art : piece.loops;
+  const templateInner = piece.artHoles.length ? piece.artHoles : piece.holes;
   return {
-    outer: minEdgeDistance(outer, idealOuter),
-    inner: kind === "ring" ? minEdgeDistance(piece.holes[0], idealHole) : Infinity,
+    outerTrue: clearanceStats(pocketOuter, trueOuter),
+    outerTemplate: clearanceStats(pocketOuter, templateOuter),
+    innerTrue: kind === "ring" ? clearanceStats(pocketInner, trueInner) : emptyStats(),
+    innerTemplate: kind === "ring" ? clearanceStats(pocketInner, templateInner) : emptyStats(),
     mesh: result.mesh,
   };
+}
+
+function emptyStats(): SampleStats {
+  return { corner: Infinity, edge: Infinity, cornerSamples: 1, edgeSamples: 1 };
+}
+
+function bedShift(loops: [number, number][][], clearance: number) {
+  const box = bboxOf(loops);
+  const trueMinX = 0;
+  const trueMinY = 0;
+  return { x: box.minX - (trueMinX - clearance), y: box.minY - (trueMinY - clearance) };
 }

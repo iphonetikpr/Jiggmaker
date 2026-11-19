@@ -371,6 +371,66 @@ function outwardNormal(a: Pt, b: Pt): Pt {
  * Offset a closed loop. Positive distance grows it (outward for a CCW ring).
  * One output vertex per input vertex so a chamfer can pair mouth and seat.
  */
+function intersectLines(origin: Pt, dir: Pt, origin2: Pt, dir2: Pt): Pt | null {
+  const den = dir[0] * dir2[1] - dir[1] * dir2[0];
+  if (Math.abs(den) < 1e-12) return null;
+  const t = ((origin2[0] - origin[0]) * dir2[1] - (origin2[1] - origin[1]) * dir2[0]) / den;
+  return [origin[0] + t * dir[0], origin[1] + t * dir[1]];
+}
+
+/** Points strictly between `from` and `to` on the short arc around `center`. */
+function arcBetween(center: Pt, from: Pt, to: Pt, radius: number, stepDeg = 6): Pt[] {
+  const a0 = Math.atan2(from[1] - center[1], from[0] - center[0]);
+  const a1 = Math.atan2(to[1] - center[1], to[0] - center[0]);
+  let sweep = a1 - a0;
+  const cross = (from[0] - center[0]) * (to[1] - center[1]) - (from[1] - center[1]) * (to[0] - center[0]);
+  if (cross > 0 && sweep < 0) sweep += Math.PI * 2;
+  if (cross < 0 && sweep > 0) sweep -= Math.PI * 2;
+  const steps = Math.max(1, Math.ceil(Math.abs(sweep) / ((stepDeg * Math.PI) / 180)));
+  const pts: Pt[] = [];
+  for (let i = 1; i < steps; i++) {
+    const a = a0 + (sweep * i) / steps;
+    pts.push([center[0] + radius * Math.cos(a), center[1] + radius * Math.sin(a)]);
+  }
+  return pts;
+}
+
+/**
+ * Offset a closed loop. Positive distance grows a CCW ring.
+ * Convex corners (relative to the offset) are round joins of radius |distance|,
+ * so the clearance at a corner equals the clearance along the edges.
+ */
+export function offsetLoopRound(loop: Loop, distance: number): Loop | null {
+  if (!Number.isFinite(distance)) return null;
+  const pts = ensureCCW(cleanLoop(loop, 1e-6));
+  if (pts.length < 3) return null;
+  if (Math.abs(distance) < 1e-9) return pts;
+  const n = pts.length;
+  const rad = Math.abs(distance);
+  const out: Loop = [];
+  for (let i = 0; i < n; i++) {
+    const prev = pts[(i + n - 1) % n];
+    const cur = pts[i];
+    const next = pts[(i + 1) % n];
+    const n0 = outwardNormal(prev, cur);
+    const n1 = outwardNormal(cur, next);
+    const a: Pt = [cur[0] + n0[0] * distance, cur[1] + n0[1] * distance];
+    const b: Pt = [cur[0] + n1[0] * distance, cur[1] + n1[1] * distance];
+    const cross = (cur[0] - prev[0]) * (next[1] - cur[1]) - (cur[1] - prev[1]) * (next[0] - cur[0]);
+    const useArc = (distance > 0 && cross > 1e-8) || (distance < 0 && cross < -1e-8);
+    if (!useArc) {
+      const hit = intersectLines(a, [cur[0] - prev[0], cur[1] - prev[1]], b, [next[0] - cur[0], next[1] - cur[1]]);
+      out.push(hit ?? a);
+      continue;
+    }
+    out.push(a);
+    for (const p of arcBetween(cur, a, b, rad)) out.push(p);
+    out.push(b);
+  }
+  const cleaned = cleanLoop(out, 1e-5);
+  return cleaned.length >= 3 ? cleaned : null;
+}
+
 export function offsetLoop(loop: Loop, distance: number): Loop | null {
   if (!Number.isFinite(distance)) return null;
   const pts = ensureCCW(cleanLoop(loop, 1e-7));
