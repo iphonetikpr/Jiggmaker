@@ -723,6 +723,13 @@ select {
   gap: 8px;
 }
 
+fieldset.dlgrid {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0;
+}
+
 .dlgrid button {
   text-align: left;
   display: flex;

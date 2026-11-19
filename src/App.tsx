@@ -786,7 +786,10 @@ export default function App() {
 
           <div className="card">
             <h2>Descargas</h2>
-            <div className="dlgrid">
+            {result.blockers.length > 0 && (
+              <p className="warnbar">Exportación bloqueada. {result.blockers.join(" ")}</p>
+            )}
+            <fieldset className="dlgrid" disabled={result.blockers.length > 0}>
               {offersSplitZip(result) && (
                 <button
                   className="primary zip"
@@ -889,7 +892,7 @@ export default function App() {
                 <b>Contours SVG</b>
                 <span>{settings.paintSafe ? "CUT outer · GUIDE inner" : "auto-detect"}</span>
               </button>
-            </div>
+            </fieldset>
           </div>
         </div>
         <aside className="preview-rail">

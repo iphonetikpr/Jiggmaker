@@ -101,6 +101,70 @@ export function circleLoop(cx: number, cy: number, r: number, n = 24): Loop {
   return pts;
 }
 
+function centroidOf(loop: Loop): Pt {
+  let x = 0,
+    y = 0;
+  for (const p of loop) {
+    x += p[0];
+    y += p[1];
+  }
+  const n = loop.length || 1;
+  return [x / n, y / n];
+}
+
+function segmentsProperlyCross(a: Pt, b: Pt, c: Pt, d: Pt): boolean {
+  const side = (p: Pt, q: Pt, s: Pt) => (q[0] - p[0]) * (s[1] - p[1]) - (q[1] - p[1]) * (s[0] - p[0]);
+  const d1 = side(c, d, a);
+  const d2 = side(c, d, b);
+  const d3 = side(a, b, c);
+  const d4 = side(a, b, d);
+  return ((d1 > 1e-9 && d2 < -1e-9) || (d1 < -1e-9 && d2 > 1e-9)) && ((d3 > 1e-9 && d4 < -1e-9) || (d3 < -1e-9 && d4 > 1e-9));
+}
+
+/**
+ * Closed loops with overlapping area. Shared edges and corner touches do not count.
+ * Samples the bbox intersection so axis-aligned pockets that overlap without a
+ * proper edge crossing (identical Y span) are still caught.
+ */
+export function loopsOverlap(a: Loop, b: Loop, eps = 0.05): boolean {
+  if (a.length < 3 || b.length < 3) return false;
+  const ba = bboxOf([a]);
+  const bb = bboxOf([b]);
+  const x0 = Math.max(ba.minX, bb.minX);
+  const y0 = Math.max(ba.minY, bb.minY);
+  const x1 = Math.min(ba.maxX, bb.maxX);
+  const y1 = Math.min(ba.maxY, bb.maxY);
+  if (x1 - x0 <= eps || y1 - y0 <= eps) return false;
+  const samples: Pt[] = [
+    [(x0 + x1) / 2, (y0 + y1) / 2],
+    [x0 + (x1 - x0) * 0.25, y0 + (y1 - y0) * 0.5],
+    [x0 + (x1 - x0) * 0.75, y0 + (y1 - y0) * 0.5],
+    [x0 + (x1 - x0) * 0.5, y0 + (y1 - y0) * 0.25],
+    [x0 + (x1 - x0) * 0.5, y0 + (y1 - y0) * 0.75],
+  ];
+  for (const p of samples) {
+    if (pointInPoly(p, a) && pointInPoly(p, b)) return true;
+  }
+  for (let i = 0; i < a.length; i++) {
+    const a1 = a[i];
+    const a2 = a[(i + 1) % a.length];
+    for (let j = 0; j < b.length; j++) {
+      if (segmentsProperlyCross(a1, a2, b[j], b[(j + 1) % b.length])) return true;
+    }
+  }
+  return pointInPoly(centroidOf(a), b) || pointInPoly(centroidOf(b), a);
+}
+
+/** Smaller bbox overlap axis, in mm. 0 when the boxes only touch. */
+export function loopsOverlapDepth(a: Loop, b: Loop): number {
+  const ba = bboxOf([a]);
+  const bb = bboxOf([b]);
+  const ox = Math.min(ba.maxX, bb.maxX) - Math.max(ba.minX, bb.minX);
+  const oy = Math.min(ba.maxY, bb.maxY) - Math.max(ba.minY, bb.minY);
+  if (ox <= 0 || oy <= 0) return 0;
+  return Math.min(ox, oy);
+}
+
 export function pointInPoly(pt: Pt, loop: Loop): boolean {
   const [x, y] = pt;
   let inside = false;

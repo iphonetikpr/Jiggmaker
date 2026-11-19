@@ -1,7 +1,7 @@
 import { FRAME_PLATE } from "../constants";
 import type { BedSize, Entity, JobObject, JobSettings, JigResult, Loop, PlacedPiece } from "../types";
 import { bboxOf, rectLoop, roundedRectLoop, translateLoop } from "./geom";
-import { applyMoves, footprintOf, packObjects } from "./layout";
+import { applyMoves, assessPlacement, footprintOf, packObjects } from "./layout";
 import { extrudePlate, plateMeshXform, solidHeight } from "./mesh";
 import { bedFromSettings, plateLabel } from "./filename";
 import { paintSafeGuideEntity, paintSafeLoops, templateOuterLoops } from "./paintSafe";
@@ -53,6 +53,18 @@ export function generateJig(
     pack.placed,
     objects.map((o) => !!o.notch),
     bed,
+  );
+  // Moves (imported or dragged) land after packing. Re-check quantities, margins, and overlap.
+  const layout = assessPlacement(
+    pack.placed,
+    prepped.map((o, index) => ({
+      index,
+      letter: o.letter,
+      count: o.count,
+      w: objects[index]?.stlName ? o.w : objects[index].rectW,
+      h: objects[index]?.stlName ? o.h : objects[index].rectH,
+    })),
+    { bedW: bed.w, bedH: bed.h, marginX: settings.marginX, marginY: settings.marginY, bedName: bed.name },
   );
 
   let jigW = bed.w;
@@ -224,14 +236,15 @@ export function generateJig(
   const oversized = jigW > maxBed + 1e-6 || jigH > maxBed + 1e-6;
   const splits = settings.splitPlate && oversized ? planPlateSplits(jigW, jigH, maxBed) : [];
 
-  let warn: string | null = null;
-  if (!pack.fits) {
-    warn = "No cabe todo en la cama. Baja qty, spacing o márgenes, o usa Tight / cama Large.";
-  } else if (oversized) {
-    warn = settings.splitPlate
-      ? `Placa ${jigW.toFixed(0)}×${jigH.toFixed(0)} mm > ${maxBed} mm: split en ${splits.length || 2} piezas (o imprime en H2).`
-      : `Placa ${jigW.toFixed(0)}×${jigH.toFixed(0)} mm > cama FDM ${maxBed} mm. Por defecto se asume H2 (250×250×250+). Activa split para dividir, o imprime en una H2.`;
+  const notes: string[] = [...layout.blockers];
+  if (layout.fits && oversized) {
+    notes.push(
+      settings.splitPlate
+        ? `Placa ${jigW.toFixed(0)}×${jigH.toFixed(0)} mm > ${maxBed} mm: split en ${splits.length || 2} piezas (o imprime en H2).`
+        : `Placa ${jigW.toFixed(0)}×${jigH.toFixed(0)} mm > cama FDM ${maxBed} mm. Por defecto se asume H2 (250×250×250+). Activa split para dividir, o imprime en una H2.`,
+    );
   }
+  const warn = notes.length ? notes.join("\n") : null;
 
   return {
     placed,
@@ -250,7 +263,8 @@ export function generateJig(
       partHeight: o.partHeight,
     })),
     totalUnits: placed.length,
-    fits: pack.fits,
+    fits: layout.fits,
+    blockers: layout.blockers,
     partHeight: prepped.length ? Math.max(...prepped.map((o) => o.partHeight)) : 0,
     bed,
     plateName: plateLabel(settings),
