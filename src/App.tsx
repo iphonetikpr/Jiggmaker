@@ -82,6 +82,7 @@ export default function App() {
   const presetDirty = activePreset ? presetDiffers(activePreset, settings, objects) : false;
 
   const stem = baseName(result, objects[0]?.name || "jig");
+  const exportDescribedBy = result.blockers.length ? "export-blockers" : undefined;
   const stripChoices = fitClearances(settings.material);
 
   const exportTestStrip = () => {
@@ -531,7 +532,7 @@ export default function App() {
                   <label>Base thickness mm</label>
                   <NumberField min={0} step={0.2} value={settings.baseThk} onChange={(baseThk) => patchSettings({ baseThk })} aria-label="Base thickness mm" />
                 </div>
-                {baseWarn ? <p className="warnbar thin-base-warn">{baseWarn}</p> : null}
+                {baseWarn ? <p className="notice-msg thin-base-warn">{baseWarn}</p> : null}
                 <div className="row">
                   <label>Pocket depth mm</label>
                   <NumberField min={0.5} step={0.5} value={settings.pocketDepth} onChange={(pocketDepth) => patchSettings({ pocketDepth })} aria-label="Pocket depth mm" />
@@ -687,8 +688,26 @@ export default function App() {
 
         <div className="workspace">
         <div className="preview-col">
-          {result.warn && <div className="warnbar">{result.warn}</div>}
-          {result.notchWarn && <div className="warnbar">{result.notchWarn}</div>}
+          {result.blockers.length > 0 && (
+            <div id="export-blockers" className="blocker-list" role="alert">
+              {result.blockers.map((line) => (
+                <p key={line} className="blocker-msg">
+                  <svg className="blocker-icon" viewBox="0 0 16 16" aria-hidden>
+                    <path d="M8 1.5 15 14H1L8 1.5Z" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                    <path d="M8 6.2v3.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                    <circle cx="8" cy="12.1" r="0.7" fill="currentColor" />
+                  </svg>
+                  <span>{line}</span>
+                </p>
+              ))}
+            </div>
+          )}
+          {result.notices.map((line) => (
+            <p key={line} className="notice-msg">
+              {line}
+            </p>
+          ))}
+          {result.notchWarn && <p className="notice-msg">{result.notchWarn}</p>}
           <div className="preview-card">
             <div className="preview-hd">
               <b>Preview</b>
@@ -786,14 +805,12 @@ export default function App() {
 
           <div className="card">
             <h2>Descargas</h2>
-            {result.blockers.length > 0 && (
-              <p className="warnbar">Exportación bloqueada. {result.blockers.join(" ")}</p>
-            )}
-            <fieldset className="dlgrid" disabled={result.blockers.length > 0}>
+            <fieldset className="dlgrid" disabled={result.blockers.length > 0} aria-describedby={exportDescribedBy}>
               {offersSplitZip(result) && (
                 <button
                   className="primary zip"
                   type="button"
+                  aria-describedby={exportDescribedBy}
                   onClick={() => {
                     void downloadSplitZip(result, stem);
                   }}
@@ -806,6 +823,7 @@ export default function App() {
               )}
               <button
                 type="button"
+                aria-describedby={exportDescribedBy}
                 onClick={() => {
                   const f = laserFiles(result, stem).find((x) => x.name.endsWith("_POCKET.dxf"));
                   if (f) downloadBytes(f.name, f.data, f.mime);
@@ -816,6 +834,7 @@ export default function App() {
               </button>
               <button
                 type="button"
+                aria-describedby={exportDescribedBy}
                 onClick={() => {
                   const f = laserFiles(result, stem).find((x) => x.name.endsWith("_BASE.dxf"));
                   if (f) downloadBytes(f.name, f.data, f.mime);
@@ -826,6 +845,7 @@ export default function App() {
               </button>
               <button
                 type="button"
+                aria-describedby={exportDescribedBy}
                 onClick={() => {
                   const f = laserFiles(result, stem).find((x) => x.name.endsWith("_POCKET.svg"));
                   if (f) downloadBytes(f.name, f.data, f.mime);
@@ -836,6 +856,7 @@ export default function App() {
               </button>
               <button
                 type="button"
+                aria-describedby={exportDescribedBy}
                 onClick={() => {
                   const f = laserFiles(result, stem).find((x) => x.name.endsWith("_BASE.svg"));
                   if (f) downloadBytes(f.name, f.data, f.mime);
@@ -846,6 +867,7 @@ export default function App() {
               </button>
               <button
                 type="button"
+                aria-describedby={exportDescribedBy}
                 onClick={() => {
                   const files = stlFiles(result, stem).filter((x) => !x.name.includes("_ascii"));
                   for (const f of files) downloadBytes(f.name, f.data, f.mime);
@@ -860,6 +882,7 @@ export default function App() {
               </button>
               <button
                 type="button"
+                aria-describedby={exportDescribedBy}
                 onClick={() => {
                   const files = stlFiles(result, stem).filter((x) => x.name.includes("_ascii"));
                   for (const f of files) downloadBytes(f.name, f.data, f.mime);
@@ -868,12 +891,13 @@ export default function App() {
                 <b>STL ASCII</b>
                 <span>compatibilidad</span>
               </button>
-              <button type="button" onClick={() => downloadPng()}>
+              <button type="button" aria-describedby={exportDescribedBy} onClick={() => downloadPng()}>
                 <b>Template PNG</b>
                 <span>{settings.dpi} dpi</span>
               </button>
               <button
                 type="button"
+                aria-describedby={exportDescribedBy}
                 onClick={() => {
                   const f = templateSvg(result, stem);
                   downloadBytes(f.name, f.data, f.mime);
@@ -884,6 +908,7 @@ export default function App() {
               </button>
               <button
                 type="button"
+                aria-describedby={exportDescribedBy}
                 onClick={() => {
                   const f = contoursSvg(result, stem);
                   downloadBytes(f.name, f.data, f.mime);

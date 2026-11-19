@@ -8,7 +8,12 @@ export function piecePose(piece: PlacedPiece): { pocket: Loop[]; art: Loop[]; ho
   return {
     pocket: piece.loops,
     art: piece.art.length ? piece.art : piece.loops,
-    holes: piece.artHoles.length ? piece.artHoles : piece.holes,
+    holes:
+      piece.hmode === "template" || piece.hmode === "all"
+        ? piece.artHoles.length
+          ? piece.artHoles
+          : piece.holes
+        : [],
   };
 }
 

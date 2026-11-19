@@ -208,6 +208,8 @@ export interface JigResult {
    * Layout failures (missing pieces, overlap, margin) set `fits` false as well.
    */
   blockers: string[];
+  /** Non-blocking notes (pick-out omitted, plate larger than the FDM bed). */
+  notices: string[];
   partHeight: number;
   bed: BedSize;
   plateName: string;

@@ -320,12 +320,12 @@ function marching(grid: Uint8Array, w: number, h: number): Loop[] {
   return loops;
 }
 
-export function silhouetteLoops(proj: Projected, clearance: number, maxPixel?: number): Loop[] {
+export function silhouetteLoops(proj: Projected, clearance: number, maxPixel?: number, simplifyEps?: number): Loop[] {
   const [minX, minY, maxX, maxY] = proj.bbox;
   const bw = maxX - minX,
     bh = maxY - minY;
   let pixel = Math.min(0.5, Math.max(0.08, Math.max(bw, bh) / 800));
-  if (maxPixel && maxPixel > 0) pixel = Math.min(pixel, Math.max(0.05, maxPixel));
+  if (maxPixel && maxPixel > 0) pixel = Math.min(pixel, Math.max(0.01, maxPixel));
   const rad = Math.max(0, clearance) / pixel;
   const pad = Math.ceil(rad) + 2;
   const gw = Math.ceil(bw / pixel) + 2 * pad + 1;
@@ -338,7 +338,7 @@ export function silhouetteLoops(proj: Projected, clearance: number, maxPixel?: n
   }
   const fat = dilate(grid, gw, gh, rad);
   const raw = marching(fat, gw, gh);
-  const eps = 0.9 * pixel;
+  const eps = simplifyEps != null ? simplifyEps : 0.9 * pixel;
   const loops: Loop[] = [];
   for (const loop of raw) {
     const mapped = loop.map(([x, y]) => [minX + (x / 2 - pad) * pixel, minY + (y / 2 - pad) * pixel] as [number, number]);

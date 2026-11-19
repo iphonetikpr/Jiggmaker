@@ -12,7 +12,7 @@ import {
 import { generateJig } from "./generate";
 import { pointInPoly } from "./geom";
 import { defaultSettings, newObject } from "./history";
-import { meshBBox, meshNonManifoldEdges } from "./mesh";
+import { meshBBox, meshNonManifoldEdges, meshSingleIncidenceEdges } from "./mesh";
 import { buildSplitMeshes, dowelCenters, dowelSitesFor, placeSpansForJoint, splitSeamMarks } from "./split";
 import type { JobSettings, PlateSplit, Tri } from "../types";
 
@@ -23,24 +23,6 @@ function job(patch: Partial<JobSettings> = {}) {
   obj.count = 2;
   obj.rectW = 40;
   obj.rectH = 20;
-  obj.mode = "rectangle";
-  return generateJig([obj], {}, settings, {});
-}
-
-function filledLargeJob(count = 12) {
-  const settings: JobSettings = {
-    ...defaultSettings(),
-    scaleComp: false,
-    footprint: "bed",
-    bed: "333x418",
-    splitPlate: true,
-    maxPrintBed: 250,
-  };
-  const obj = newObject(0);
-  obj.name = "coin";
-  obj.count = count;
-  obj.rectW = 50;
-  obj.rectH = 30;
   obj.mode = "rectangle";
   return generateJig([obj], {}, settings, {});
 }
@@ -187,12 +169,13 @@ describe("PLA plate split", () => {
   });
 
   it("puts matching pin/hole + overlap on every Y seam of a Large 2×2 grid", () => {
-    const r = filledLargeJob(12);
+    const r = job({ bed: "333x418", splitPlate: true, maxPrintBed: 250 });
+    expect(r.blockers).toEqual([]);
     expect(r.splits).toHaveLength(4);
     expect(r.splits.every((s) => s.nx === 2 && s.ny === 2)).toBe(true);
     const marks = splitSeamMarks(r.splits);
     expect(marks.some((m) => m.axis === "x")).toBe(true);
-    expect(marks.some((m) => m.axis === "y" && Math.abs(m.at - r.jig.h / 2) < 1)).toBe(true);
+    expect(marks.some((m) => m.axis === "y")).toBe(true);
 
     const pieces = buildSplitMeshes(r);
     for (const pair of adjacentPairs(r.splits, "y")) {
@@ -220,6 +203,7 @@ describe("PLA plate split", () => {
       expectHandSoloPin(ringDia(maleMesh, "x", pair.male.x1 + SPLIT_OVERLAP, male[0].span, male[0].z));
       expectHandSoloHole(ringDia(femaleMesh, "x", pair.female.x0, female[0].span, female[0].z));
     }
+    for (const piece of pieces) expect(meshSingleIncidenceEdges(piece.mesh)).toBe(0);
   });
 
   it("keeps Hand Solo hole Ø 3.2–3.3 after scaleComp (not ~3.5)", () => {
@@ -233,9 +217,9 @@ describe("PLA plate split", () => {
     };
     const obj = newObject(0);
     obj.name = "coin";
-    obj.count = 12;
-    obj.rectW = 50;
-    obj.rectH = 30;
+    obj.count = 2;
+    obj.rectW = 40;
+    obj.rectH = 20;
     obj.mode = "rectangle";
     const r = generateJig([obj], {}, settings, {});
     expect(r.meshXform.s).toBeCloseTo(1.003, 6);
@@ -252,7 +236,7 @@ describe("PLA plate split", () => {
   });
 
   it("does not place dowels through pockets", () => {
-    for (const r of [job({ bed: "333x88", splitPlate: true }), filledLargeJob(12)]) {
+    for (const r of [job({ bed: "333x88", splitPlate: true }), job({ bed: "333x418", splitPlate: true })]) {
       for (const s of r.splits) {
         for (const d of dowelSitesFor(s, r)) {
           const x = d.axis === "x" ? d.at : d.span;

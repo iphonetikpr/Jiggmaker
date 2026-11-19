@@ -27,8 +27,8 @@ export const DEFAULTS = {
   slotClearance: 0.2,
   spacingX: 5,
   spacingY: 5,
-  marginX: 2,
-  marginY: 2,
+  marginX: 3,
+  marginY: 3,
   objGap: 10,
   offsetPct: 50,
   pickDia: 8,
@@ -123,6 +123,8 @@ export const SPLIT_HOLE_DIA_MIN = 3.2;
 export const SPLIT_HOLE_DIA_MAX = 3.3;
 /** 0.25 mm clearance on the Ø3.0 pin — inside the 3.2–3.3 window. */
 export const SPLIT_HOLE_DIA = 3.25;
+/** Solid wall required between a dowel hole (Ø and 2.5 mm depth) and a pocket seat. */
+export const DOWEL_POCKET_WALL = 2;
 
 /**
  * Fit-test strip: three per-side silhouette offsets, one material table.
@@ -155,6 +157,14 @@ export const TEST_STRIP = {
 export const FINGER_NOTCH_DIA = 14;
 /** Skip the notch when the remaining wall to another pocket would be under this. */
 export const FINGER_NOTCH_MIN_WALL = 1.5;
+/**
+ * Wall from a pocket seat to the jig edge, and between pocket seats,
+ * must be at least clearance + lead-in chamfer + this extra (mm).
+ */
+export const MIN_WALL_EXTRA_MM = 2;
+/** Pick-out hole must sit at least this far inside the pocket wall. */
+export const PICK_OUT_SIDE_MM = 2;
+
 /** 45° mouth chamfer. Horizontal offset equals this depth. */
 export const LEAD_IN_MM = 0.6;
 /** Used when the pocket's narrower side is under LEAD_IN_NARROW_BELOW. */
