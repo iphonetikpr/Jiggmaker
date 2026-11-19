@@ -6,6 +6,7 @@ import {
   HISTORY_SETTING_FIELDS,
 } from "../constants";
 import type { HistoryJob, JobObject, JobSettings } from "../types";
+import { finiteNumber, normalizeSettings } from "./limits";
 
 export function defaultSettings(): JobSettings {
   return {
@@ -157,12 +158,45 @@ export function applyHistorySettings(raw: Record<string, unknown> | HistoryJob["
     else if (k === "footprint" && (v === "bed" || v === "tight")) s.footprint = v;
     else if (k === "paintSafeMode" && (v === "inset" || v === "fixed")) s.paintSafeMode = v;
     else if (k === "material" && (v === "pla" || v === "petg" || v === "resin")) s.material = v;
-    else if (numKeys.has(k) && k in s) (s as unknown as Record<string, number>)[k] = typeof v === "number" ? v : parseFloat(String(v));
+    else if (numKeys.has(k) && k in s) {
+      const current = (s as unknown as Record<string, number>)[k];
+      (s as unknown as Record<string, number>)[k] = finiteNumber(v, current);
+    }
     else if (boolKeys.has(k) && k in s) {
       (s as unknown as Record<string, boolean>)[k] = v === true || v === "true";
     }
   }
-  return s;
+  return normalizeSettings(s);
+}
+
+export const HISTORY_SAVE_FAILED = "No se pudo guardar el historial (almacén lleno). Exporta a JSON.";
+
+export function historyImportMessage(added: number): string {
+  return `Importados ${added} ${added === 1 ? "trabajo" : "trabajos"}.`;
+}
+
+export function storeHistory(jobs: HistoryJob[]): { ok: true; jobs: HistoryJob[] } | { ok: false; error: string } {
+  if (!saveHistory(jobs)) return { ok: false, error: HISTORY_SAVE_FAILED };
+  return { ok: true, jobs };
+}
+
+/** Persist a merged history. A failed write does not report the import as saved. */
+export function importHistoryJobs(
+  existing: HistoryJob[],
+  incoming: unknown,
+): { ok: true; jobs: HistoryJob[]; added: number } | { ok: false; error: string } {
+  const { jobs, added } = mergeImported(existing, incoming);
+  const saved = storeHistory(jobs);
+  if (!saved.ok) return saved;
+  return { ok: true, jobs, added };
+}
+
+/** Persist a deletion. A failed write leaves the previous list in place. */
+export function deleteHistoryJob(
+  jobs: HistoryJob[],
+  id: string,
+): { ok: true; jobs: HistoryJob[] } | { ok: false; error: string } {
+  return storeHistory(jobs.filter((job) => job.id !== id));
 }
 
 export function loadHistory(): HistoryJob[] {

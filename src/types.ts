@@ -131,6 +131,9 @@ export interface PreparedObject {
   holesMode: HolesMode;
   w: number;
   h: number;
+  /** Part size before clearance. Pocket `w`/`h` include it. */
+  nominalW: number;
+  nominalH: number;
   partHeight: number;
 }
 
@@ -199,6 +202,8 @@ export interface JigResult {
     letter: string;
     w: number;
     h: number;
+    nominalW: number;
+    nominalH: number;
     partHeight: number;
   }>;
   totalUnits: number;

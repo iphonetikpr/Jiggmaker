@@ -1,5 +1,8 @@
 import { FRAME_PLATE, THIN_BASE_MM, THIN_JIG_SPAN_MM } from "../constants";
 import type { JigResult, UpAxis } from "../types";
+import { formatMm } from "../cad/format";
+
+export { formatMm };
 
 export const FLIP_UP: Record<UpAxis, UpAxis> = {
   "z+": "z-",
@@ -14,6 +17,15 @@ export function flipUp(up: UpAxis): UpAxis {
   return FLIP_UP[up];
 }
 
+/** Object row: nominal size, and the clearance pocket when it differs. */
+export function summaryObjectMeta(placed: number, nominalW: number, nominalH: number, pocketW: number, pocketH: number): string {
+  const nominal = `×${placed} · ${formatMm(nominalW)}×${formatMm(nominalH)} mm`;
+  if (Math.abs(pocketW - nominalW) > 0.049 || Math.abs(pocketH - nominalH) > 0.049) {
+    return `${nominal} · pocket ${formatMm(pocketW)}×${formatMm(pocketH)} mm`;
+  }
+  return nominal;
+}
+
 /** Bed line in the Summary card, e.g. "Mini · 333 × 88 mm". */
 export function summaryBedLine(result: JigResult): string {
   const b = result.bed;
@@ -21,12 +33,24 @@ export function summaryBedLine(result: JigResult): string {
 }
 
 export function summaryJigSize(result: JigResult): string {
-  return `${result.jig.w.toFixed(0)} × ${result.jig.h.toFixed(0)} mm`;
+  return `${formatMm(result.jig.w)} × ${formatMm(result.jig.h)} mm`;
 }
 
-/** Nominal exported plate, before scaleComp. Height is base thickness + pocket depth. */
+/** Plate size before scaleComp. Height is base thickness + pocket depth. */
+export function summaryStlNominal(result: JigResult): string {
+  return `${formatMm(result.jig.w)} × ${formatMm(result.jig.h)} × ${formatMm(result.solidH)} mm`;
+}
+
+/** Same plate after the intentional ×1.003 scale. Null when scaleComp is off. */
+export function summaryStlCompensated(result: JigResult): string | null {
+  const scale = result.meshXform?.s ?? 1;
+  if (Math.abs(scale - 1) < 1e-9) return null;
+  return `${formatMm(result.jig.w * scale, 3)} × ${formatMm(result.jig.h * scale, 3)} × ${formatMm(result.solidH * scale, 3)} mm`;
+}
+
+/** Nominal exported plate, before scaleComp. */
 export function summaryStlSize(result: JigResult): string {
-  return `${result.jig.w.toFixed(0)} × ${result.jig.h.toFixed(0)} × ${result.solidH.toFixed(1)} mm`;
+  return summaryStlNominal(result);
 }
 
 export const THIN_BASE_WARNING =

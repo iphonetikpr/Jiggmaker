@@ -7,9 +7,13 @@ import { meshFromBytes } from "../cad/prepare";
 import { orientedPartBounds } from "./partView";
 import {
   flipUp,
+  formatMm,
   summaryBedLine,
   summaryJigSize,
+  summaryObjectMeta,
   summaryPlateHint,
+  summaryStlCompensated,
+  summaryStlNominal,
   summaryStlSize,
   THIN_BASE_WARNING,
   thinBaseWarning,
@@ -33,7 +37,9 @@ describe("summary helpers", () => {
     const mini = generateJig([obj], {}, full, {});
     expect(summaryBedLine(mini)).toBe("Mini · 333 × 88 mm");
     expect(summaryJigSize(mini)).toBe("333 × 88 mm");
-    expect(summaryStlSize(mini)).toBe("333 × 88 × 5.0 mm");
+    expect(summaryStlSize(mini)).toBe("333 × 88 × 5 mm");
+    expect(summaryStlNominal(mini)).toBe("333 × 88 × 5 mm");
+    expect(summaryStlCompensated(mini)).toBe("333.999 × 88.264 × 5.015 mm");
     expect(summaryPlateHint(mini)).toBeNull();
     expect(mini.totalUnits).toBe(2);
     expect(mini.mesh.length).toBeGreaterThan(8);
@@ -41,11 +47,28 @@ describe("summary helpers", () => {
     const frame = generateJig([obj], {}, { ...full, useAdapter: true }, {});
     expect(summaryBedLine(frame)).toBe("Mini · 333 × 88 mm");
     expect(summaryJigSize(frame)).toBe("334 × 90 mm");
-    expect(summaryStlSize(frame)).toBe("334 × 90 × 5.0 mm");
+    expect(summaryStlSize(frame)).toBe("334 × 90 × 5 mm");
+    expect(summaryStlCompensated(frame)).toBe("335.002 × 90.27 × 5.015 mm");
     expect(summaryPlateHint(frame)).toBe("frame 334×90");
 
     const large = generateJig([obj], {}, { ...full, bed: "333x418" }, {});
     expect(summaryBedLine(large)).toBe("Large · 333 × 418 mm");
+  });
+
+  it("keeps a 1.5 mm nominal size and separates the compensated STL", () => {
+    const obj = newObject(0);
+    obj.mode = "rectangle";
+    obj.rectW = 1.5;
+    obj.rectH = 30;
+    obj.count = 1;
+    const result = generateJig([obj], {}, defaultSettings(), {});
+    expect(formatMm(result.objects[0].nominalW)).toBe("1.5");
+    expect(summaryObjectMeta(1, 50, 30, 50.3, 30.3)).toBe("×1 · 50×30 mm · pocket 50.3×30.3 mm");
+    expect(formatMm(result.objects[0].nominalH)).toBe("30");
+    expect(result.objects[0].w).toBeCloseTo(1.5 + 2 * DEFAULTS.clearance, 5);
+    expect(summaryStlNominal(result)).not.toBe(summaryStlCompensated(result));
+    expect(summaryStlCompensated(result)).toContain(formatMm(result.jig.w * result.meshXform.s, 3));
+    expect(result.meshXform.s).toBeCloseTo(1.003, 6);
   });
 
   it("truncates long object names", () => {

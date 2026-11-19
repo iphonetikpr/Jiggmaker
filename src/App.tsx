@@ -18,12 +18,15 @@ import {
   applyHistorySettings,
   b64ToBytes,
   defaultSettings,
+  deleteHistoryJob,
+  historyImportMessage,
+  importHistoryJobs,
   loadHistory,
-  mergeImported,
   newObject,
   saveHistory,
   serializeJob,
 } from "./cad/history";
+import { normalizeObject } from "./cad/limits";
 import {
   baseName,
   contoursSvg,
@@ -187,7 +190,7 @@ export default function App() {
         }
       }
       if (!raw.stl) o.mode = "rectangle";
-      objs.push(o);
+      objs.push(normalizeObject(o));
     });
     setStlMap(nextStl);
     setObjects(objs.length ? objs : [newObject(0)]);
@@ -303,10 +306,13 @@ export default function App() {
     reader.onload = () => {
       try {
         const parsed = JSON.parse(String(reader.result));
-        const { jobs, added } = mergeImported(loadHistory(), parsed);
-        saveHistory(jobs);
-        setHistory(jobs);
-        alert("Importados " + added + " job" + (added === 1 ? "" : "s") + ".");
+        const imported = importHistoryJobs(loadHistory(), parsed);
+        if (!imported.ok) {
+          alert(imported.error);
+          return;
+        }
+        setHistory(imported.jobs);
+        alert(historyImportMessage(imported.added));
       } catch (e) {
         alert("No se pudo leer el archivo: " + ((e as Error).message || e));
       }
@@ -672,9 +678,12 @@ export default function App() {
                       type="button"
                       onClick={() => {
                         if (!confirm("¿Borrar " + (j.name || "untitled") + "?")) return;
-                        const next = loadHistory().filter((x) => x.id !== j.id);
-                        saveHistory(next);
-                        setHistory(next);
+                        const saved = deleteHistoryJob(loadHistory(), j.id);
+                        if (!saved.ok) {
+                          alert(saved.error);
+                          return;
+                        }
+                        setHistory(saved.jobs);
                       }}
                     >
                       ✕

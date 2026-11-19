@@ -4,6 +4,8 @@ import { generateJig } from "./generate";
 import { bboxOf } from "./geom";
 import { defaultSettings, newObject } from "./history";
 import { materializeProject, parseProject, projectFilename, serializeProject } from "./projectFile";
+import { applyHistorySettings } from "./history";
+import { formatMm } from "../ui/summary";
 import { makeBoxStl } from "./stl";
 import type { JobObject, JobSettings, Loop } from "../types";
 
@@ -102,6 +104,39 @@ describe("project file", () => {
     const empty = parseProject({ schema: PROJECT_SCHEMA, schemaVersion: 1, settings: {}, objects: [] });
     expect(empty.ok).toBe(false);
     if (!empty.ok) expect(empty.error).toMatch(/no incluye objetos/);
+  });
+
+  it("normalizes an invalid width the same way the number field does", () => {
+    const obj = newObject(0);
+    obj.name = "neg";
+    obj.rectW = 50;
+    obj.rectH = 30;
+    const doc = serializeProject("neg", defaultSettings(), [obj], {}, {});
+    doc.objects[0].rectW = -5;
+    const parsed = parseProject(JSON.parse(JSON.stringify(doc)));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const job = materializeProject(parsed.value);
+    expect(job.ok).toBe(true);
+    if (!job.ok) return;
+    expect(job.value.objects[0].rectW).toBe(1);
+    const made = generateJig(job.value.objects, job.value.stlMap, job.value.settings, {});
+    expect(made.objects[0].nominalW).toBeCloseTo(1, 5);
+    expect(made.objects[0].w).toBeCloseTo(1 + 2 * job.value.objects[0].clear, 5);
+    expect(formatMm(made.objects[0].nominalW)).toBe("1");
+    expect(formatMm(made.objects[0].nominalH)).toBe("30");
+
+    doc.objects[0].rectW = "1,5" as unknown as number;
+    const comma = parseProject(JSON.parse(JSON.stringify(doc)));
+    expect(comma.ok).toBe(true);
+    if (!comma.ok) return;
+    const commaJob = materializeProject(comma.value);
+    expect(commaJob.ok).toBe(true);
+    if (!commaJob.ok) return;
+    expect(commaJob.value.objects[0].rectW).toBe(1.5);
+
+    expect(applyHistorySettings({ marginX: -4, pocketDepth: "1,5" }).marginX).toBe(0);
+    expect(applyHistorySettings({ pocketDepth: "1,5" }).pocketDepth).toBe(1.5);
   });
 
   it("reports an unreadable embedded STL", () => {

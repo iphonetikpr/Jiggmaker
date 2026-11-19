@@ -313,6 +313,8 @@ export function generateJig(
       letter: o.letter,
       w: o.w,
       h: o.h,
+      nominalW: o.nominalW,
+      nominalH: o.nominalH,
       partHeight: o.partHeight,
     })),
     totalUnits: placed.length,
